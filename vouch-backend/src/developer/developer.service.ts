@@ -108,5 +108,31 @@ export class DeveloperService {
 
     return apiKey.developer;
   }
+
+  /**
+   * Looks up a PlatformUser by externalUserId and developerId.
+   * If not found, creates a new PlatformUser record.
+   */
+  async resolveOrCreatePlatformUser(externalUserId: string, developerId: string) {
+    const existingUser = await this.prisma.platformUser.findUnique({
+      where: {
+        externalUserId_developerId: {
+          externalUserId,
+          developerId,
+        },
+      },
+    });
+
+    if (existingUser) {
+      return existingUser;
+    }
+
+    return this.prisma.platformUser.create({
+      data: {
+        externalUserId,
+        developerId,
+      },
+    });
+  }
 }
 

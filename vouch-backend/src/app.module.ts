@@ -3,6 +3,8 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DeveloperModule } from './developer/developer.module';
+import { HealthController } from './health.controller';
+import { CommonModule } from './common/common.module.js';
 
 @Module({
   imports: [
@@ -10,9 +12,11 @@ import { DeveloperModule } from './developer/developer.module';
     PrismaModule,
     EventEmitterModule.forRoot(),
     DeveloperModule,
+    CommonModule,
   ],
+  controllers: [HealthController],
 })
-export class AppModule {}
+export class AppModule { }
 
 
 
