@@ -5,6 +5,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { DeveloperModule } from './developer/developer.module';
 import { HealthController } from './health.controller';
 import { CommonModule } from './common/common.module.js';
+import { IdentityModule } from './identity/identity.module.js';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { CommonModule } from './common/common.module.js';
     EventEmitterModule.forRoot(),
     DeveloperModule,
     CommonModule,
+    IdentityModule,
   ],
   controllers: [HealthController],
 })
