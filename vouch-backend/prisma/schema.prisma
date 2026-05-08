@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// The developer who signed up on the Vouch portal
+model Developer {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  supabaseUid String   @unique
+  createdAt   DateTime @default(now())
+
+  apiKeys      ApiKey[]
+  platformUsers PlatformUser[]
+  logs         DeveloperLog[]
+  agreements   Agreement[]
+}
+
+// A user on a client app (e.g. the freelancing platform)
+// Vouch never owns their password — only their verification state
+model PlatformUser {
+  id                            String   @id @default(uuid())
+  externalUserId                String   // the ID the client app sends
+  developerId                   String
+  developer                     Developer @relation(fields: [developerId], references: [id])
+  identityVerified              Boolean  @default(false)
+  identityMatchScore            Float?
+  livenessPassed                Boolean  @default(false)
+  documentType                  String?
+  onboardingLocation            Json?
+  deviceFingerprintAtOnboarding String?
+  createdAt                     DateTime @default(now())
+
+  fraudAssessments FraudAssessment[]
+  squadSignals     SquadSignal[]
+
+  @@unique([externalUserId, developerId]) // same external ID can exist across different developers
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  keyHash     String    @unique // SHA-256 of the raw key — never store raw
+  keyPrefix   String             // first 8 chars of raw key, for display ("sk_test_ab...")
+  developerId String
+  developer   Developer @relation(fields: [developerId], references: [id])
+  name        String    @default("Default Key")
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model Agreement {
+  id                    String       @id @default(uuid())
+  developerId           String
+  developer             Developer    @relation(fields: [developerId], references: [id])
+  buyerExternalId       String       // external ID of the buyer on the client platform
+  sellerExternalId      String       // external ID of the seller on the client platform
+  status                EscrowStatus @default(PENDING)
+  squadVirtualAccountId String?
+  squadVirtualAccountNo String?
+  totalAmount           Float
+  currency              String       @default("NGN")
+  createdAt             DateTime     @default(now())
+
+  milestones       Milestone[]
+  fraudAssessments FraudAssessment[]
+  squadSignals     SquadSignal[]
+}
+
+model Milestone {
+  id                 String          @id @default(uuid())
+  agreementId        String
+  agreement          Agreement       @relation(fields: [agreementId], references: [id])
+  title              String
+  amount             Float
+  buyerConfirmed     Boolean         @default(false)
+  sellerConfirmed    Boolean         @default(false)
+  squadTransactionId String?
+  squadPaymentLinkId String?
+  status             MilestoneStatus @default(PENDING)
+  disbursedAt        DateTime?
+  createdAt          DateTime        @default(now())
+}
+
+model FraudAssessment {
+  id               String       @id @default(uuid())
+  platformUserId   String
+  platformUser     PlatformUser @relation(fields: [platformUserId], references: [id])
+  agreementId      String?
+  agreement        Agreement?   @relation(fields: [agreementId], references: [id])
+  score            Int
+  flag             FraudFlag
+  category         String
+  triggeredSignals Json
+  contextSnapshot  Json
+  createdAt        DateTime     @default(now())
+}
+
+model SquadSignal {
+  id                     String       @id @default(uuid())
+  platformUserId         String
+  platformUser           PlatformUser @relation(fields: [platformUserId], references: [id])
+  agreementId            String?
+  agreement              Agreement?   @relation(fields: [agreementId], references: [id])
+  paymentChannel         String?
+  cardBin                String?
+  payerName              String?
+  transactionRef         String?
+  amountMatchesAgreement Boolean?
+  rawWebhookPayload      Json?
+  createdAt              DateTime     @default(now())
+}
+
+// Every meaningful backend event is logged here
+// This powers the developer dashboard
+model DeveloperLog {
+  id             String    @id @default(uuid())
+  developerId    String
+  developer      Developer @relation(fields: [developerId], references: [id])
+  eventType      LogEvent
+  externalUserId String?   // which platform user triggered this
+  agreementId    String?
+  score          Int?      // for fraud events
+  flag           String?   // for fraud events
+  payload        Json      // full context snapshot + result
+  createdAt      DateTime  @default(now())
+}
+
+enum EscrowStatus {
+  PENDING
+  FUNDED
+  IN_PROGRESS
+  COMPLETED
+  DISBURSED
+  FROZEN
+}
+
+enum MilestoneStatus {
+  PENDING
+  BUYER_CONFIRMED
+  SELLER_CONFIRMED
+  COMPLETED
+  DISBURSED
+}
+
+enum FraudFlag {
+  GREEN
+  AMBER
+  RED
+}
+
+enum LogEvent {
+  IDENTITY_VERIFIED
+  IDENTITY_FAILED
+  FRAUD_ASSESSED
+  FRAUD_BLOCKED
+  ESCROW_CREATED
+  ESCROW_FUNDED
+  ESCROW_FROZEN
+  MILESTONE_CONFIRMED
+  DISBURSEMENT_COMPLETED
+}
