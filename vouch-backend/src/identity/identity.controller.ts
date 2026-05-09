@@ -1,9 +1,21 @@
-import { Controller, Post, UseInterceptors, UploadedFiles, BadRequestException, UseGuards } from '@nestjs/common';
+import { Controller, Post, UseInterceptors, UploadedFiles, Body, BadRequestException, UseGuards } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiKeyGuard } from '../developer/guard/api-key.guard.js';
+import { CurrentDeveloper } from '../common/decorators/current-developer.decorator.js';
+import * as client from '@prisma/client';
+import { IdentityService } from './identity.service.js';
+import { IsNotEmpty, IsString } from 'class-validator';
+
+export class VerifyIdentityDto {
+  @IsString()
+  @IsNotEmpty()
+  external_user_id: string;
+}
 
 @Controller('identity')
 export class IdentityController {
+  constructor(private readonly identityService: IdentityService) {}
+
   @Post('verify')
   @UseGuards(ApiKeyGuard)
   @UseInterceptors(
@@ -34,6 +46,8 @@ export class IdentityController {
       document_image?: Express.Multer.File[];
       selfie_image?: Express.Multer.File[];
     },
+    @Body() body: VerifyIdentityDto,
+    @CurrentDeveloper() developer: client.Developer,
   ) {
     const docFile = files.document_image?.[0];
     const selfieFile = files.selfie_image?.[0];
@@ -42,27 +56,18 @@ export class IdentityController {
       throw new BadRequestException('Both document_image and selfie_image files must be uploaded.');
     }
 
-    // Confirm buffers arrive in the controller
-    console.log('[IdentityController] Document Image Buffer Size:', docFile.buffer ? docFile.buffer.length : 0);
-    console.log('[IdentityController] Selfie Image Buffer Size:', selfieFile.buffer ? selfieFile.buffer.length : 0);
+    // Call the identity service
+    const result = await this.identityService.verify(
+      docFile.buffer,
+      selfieFile.buffer,
+      body.external_user_id,
+      developer,
+    );
 
     return {
       status: 'success',
-      message: 'Both document_image and selfie_image buffers received successfully.',
-      files: {
-        document_image: {
-          originalname: docFile.originalname,
-          size: docFile.size,
-          mimetype: docFile.mimetype,
-          hasBuffer: !!docFile.buffer,
-        },
-        selfie_image: {
-          originalname: selfieFile.originalname,
-          size: selfieFile.size,
-          mimetype: selfieFile.mimetype,
-          hasBuffer: !!selfieFile.buffer,
-        },
-      },
+      message: 'Buffers successfully processed and platform user resolved.',
+      data: result,
     };
   }
 }
