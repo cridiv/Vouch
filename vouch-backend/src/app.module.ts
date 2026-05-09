@@ -6,6 +6,7 @@ import { DeveloperModule } from './developer/developer.module';
 import { HealthController } from './health.controller';
 import { CommonModule } from './common/common.module.js';
 import { IdentityModule } from './identity/identity.module.js';
+import { FraudModule } from './fraud/fraud.module.js';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { IdentityModule } from './identity/identity.module.js';
     DeveloperModule,
     CommonModule,
     IdentityModule,
+    FraudModule,
   ],
   controllers: [HealthController],
 })
