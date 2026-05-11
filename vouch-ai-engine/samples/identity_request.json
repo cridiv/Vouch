@@ -1,0 +1,10 @@
+{
+  "user_id": "usr_xyz",
+  "document_image": "base64_encoded_string_here",
+  "selfie_image": "base64_encoded_string_here",
+  "selfie_frames": [
+    "base64_encoded_frame_1",
+    "base64_encoded_frame_2",
+    "base64_encoded_frame_3"
+  ]
+}
