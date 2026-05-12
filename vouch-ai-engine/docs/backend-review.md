@@ -327,3 +327,122 @@ The response must match this exactly. Our backend DTO depends on it:
 ```
 
 Once your endpoint is running, share the URL so we can hit it with a raw Postman request to confirm the shape before wiring it into the backend.
+
+
+
+
+
+
+
+Concerning the fraud assessment endpoint, Overall the implementation is solid. A few specific things to note and one thing still needed.
+
+What looks good:
+- The has_critical_flag mechanism is the right approach. impossible_travel at +60 hits RED alone (20+60=80), VPN at +50 also hits RED alone (20+50=70). Positive signals cannot cancel critical ones. This is correct behaviour.
+- Response shape matches the contract exactly. score, flag, category, triggered_signals, recommendation, processing_time_ms all present and typed correctly.
+- The null guards on squad signals are handled correctly — squad_amount_matches_agreement only fires when explicitly False, not when None.
+- The fail-safe on exception raises a 500 instead of defaulting to GREEN. That is the right call per what we agreed.
+- triggered_signals are human-readable strings. Good.
+
+One thing to fix:
+In calculate_score(), has_critical_flag is used internally but not returned in the result dict. The ensemble layer needs it. Add it to the return:
+
+    return {
+        'score': score,
+        'triggered_signals': triggered_signals,
+        'has_critical_flag': has_critical_flag,
+        'details': context.dict()
+    }
+
+The one thing still missing — the ML layer:
+The rule engine is Layer 1 and it is approved. But the judging criteria weights AI Technical Depth at 30% and specifically asks for computer vision, NLP, or anomaly detection. A rule engine alone will not score well there. We need an Isolation Forest anomaly detection model as Layer 2 sitting on top of the rule engine.
+
+Here is exactly how it fits in:
+
+1. Rule engine runs first → produces rule_score
+2. Isolation Forest receives the raw signals PLUS rule_score as a feature → produces ml_score
+3. Ensemble: final_score = (rule_score * 0.4) + (ml_score * 0.6)
+4. If has_critical_flag: final_score = max(final_score, 70)
+5. Clamp to 0-100
+
+For training data, generate synthetic transactions — no real data needed:
+
+    def generate_normal():
+        return {
+            'account_age_days': random.randint(30, 730),
+            'previous_transactions': random.randint(3, 50),
+            'is_vpn': 0,
+            'is_proxy': 0,
+            'location_distance_km': random.randint(0, 200),
+            'device_matches_onboarding': 1,
+            'device_seen_before': 1,
+            'transaction_amount': random.randint(5000, 500000),
+            'identity_match_score': random.uniform(85, 99),
+            'identity_verified': 1,
+            'liveness_passed': 1,
+            'time_since_last_tx_hrs': random.uniform(24, 720),
+            'rule_score': random.randint(0, 35),
+        }
+
+    def generate_fraud():
+        return {
+            'account_age_days': random.randint(0, 7),
+            'previous_transactions': random.randint(0, 2),
+            'is_vpn': random.choice([0, 1]),
+            'is_proxy': random.choice([0, 1]),
+            'location_distance_km': random.randint(500, 10000),
+            'device_matches_onboarding': 0,
+            'device_seen_before': 0,
+            'transaction_amount': random.randint(500000, 5000000),
+            'identity_match_score': random.uniform(0, 70),
+            'identity_verified': random.choice([0, 1]),
+            'liveness_passed': 0,
+            'time_since_last_tx_hrs': random.uniform(0, 1),
+            'rule_score': random.randint(60, 100),
+        }
+
+    # Generate 800 normal + 200 fraud
+    data = [generate_normal() for _ in range(800)] + [generate_fraud() for _ in range(200)]
+
+Train and save:
+
+    from sklearn.ensemble import IsolationForest
+    from sklearn.preprocessing import StandardScaler
+    import joblib
+
+    features = ['account_age_days', 'previous_transactions', 'is_vpn', 'is_proxy',
+                'location_distance_km', 'device_matches_onboarding', 'device_seen_before',
+                'transaction_amount', 'identity_match_score', 'identity_verified',
+                'liveness_passed', 'time_since_last_tx_hrs', 'rule_score']
+
+    X = df[features]
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    model = IsolationForest(n_estimators=100, contamination=0.2, random_state=42)
+    model.fit(X_scaled)
+
+    joblib.dump(model, 'fraud_model.pkl')
+    joblib.dump(scaler, 'fraud_scaler.pkl')
+
+Scoring function:
+
+    def get_ml_score(context, rule_score: int) -> int:
+        features = np.array([[...all signals..., rule_score]])
+        features_scaled = scaler.transform(features)
+        raw_score = model.decision_function(features_scaled)[0]
+        ml_score = int((1 - (raw_score + 0.5)) * 100)
+        return max(0, min(100, ml_score))
+
+Update the response to include both scores for dashboard transparency:
+
+    return FraudAssessResponse(
+        score=final_score,
+        rule_score=rule_score,   # add this field
+        ml_score=ml_score,       # add this field
+        flag=flag,
+        ...
+    )
+
+Also add rule_score and ml_score to FraudAssessResponse so the backend can show both on the dashboard. Same contract otherwise — score is still the final combined number, flag and recommendation are still derived from that.
+
+Once the model is trained and integrated, share the endpoint URL so we can hit it with a raw Postman request and confirm the response shape before wiring it into the backend.
