@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Import routers
 from endpoints.identity_verify import router as identity_router
 from endpoints.fraud_assess import router as fraud_router
+from utils.model_cache import ModelCache
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -72,6 +73,14 @@ async def startup_event():
     # Log environment
     port = os.getenv("ML_PORT", "8080")
     logger.info(f"📡 ML Service port: {port}")
+    
+    # Pre-load ML models for optimal performance
+    logger.info("⏳ Pre-loading ML models...")
+    try:
+        ModelCache.initialize_models()
+        logger.info("✅ All ML models pre-loaded successfully")
+    except Exception as e:
+        logger.warning(f"⚠️  Model pre-loading partial: {e}")
     
     # Log endpoints
     logger.info("✓ FastAPI server initialized")
