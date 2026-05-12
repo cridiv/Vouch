@@ -8,6 +8,7 @@ import time
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from utils.model_cache import ResponseCache
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/fraud", tags=["fraud"])
@@ -239,6 +240,13 @@ async def assess_fraud(context: FraudAssessRequest) -> FraudAssessResponse:
     logger.info(f"[{context.transaction_id}] Starting fraud assessment for user {context.platform_user_id}...")
     
     try:
+        # Check response cache first
+        cache_key = f"fraud_{context.transaction_id}"
+        cached_response = ResponseCache.get(cache_key)
+        if cached_response:
+            logger.info(f"[{context.transaction_id}] Returning cached fraud assessment")
+            return FraudAssessResponse(**cached_response)
+        
         # Calculate fraud score
         result = FraudScoringEngine.calculate_score(context)
         score = result["score"]
@@ -260,19 +268,25 @@ async def assess_fraud(context: FraudAssessRequest) -> FraudAssessResponse:
         
         elapsed = (time.time() - start_time) * 1000
         
+        # Build response
+        response_dict = {
+            "score": score,
+            "flag": flag,
+            "category": category,
+            "triggered_signals": triggered_signals,
+            "recommendation": recommendation,
+            "processing_time_ms": elapsed
+        }
+        
+        # Cache the response for duplicate requests
+        ResponseCache.set(cache_key, response_dict)
+        
         logger.info(
             f"[{context.transaction_id}] Fraud assessment complete: "
             f"score={score}, flag={flag}, signals={len(triggered_signals)}, time={elapsed:.1f}ms"
         )
         
-        return FraudAssessResponse(
-            score=score,
-            flag=flag,
-            category=category,
-            triggered_signals=triggered_signals,
-            recommendation=recommendation,
-            processing_time_ms=elapsed
-        )
+        return FraudAssessResponse(**response_dict)
     
     except Exception as e:
         logger.error(f"[{context.transaction_id}] Exception during fraud assessment: {e}", exc_info=True)

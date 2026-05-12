@@ -14,6 +14,7 @@ import numpy as np
 from utils.image_processing import decode_file_to_image, validate_image_quality
 from utils.face_matching import extract_face_from_image, match_faces
 from utils.liveness_detection import check_liveness
+from utils.document_ocr import detect_document_type, extract_document_fields, validate_document_expiry
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/identity", tags=["identity"])
@@ -97,6 +98,31 @@ async def verify_identity(
         
         logger.info(f"[{platform_user_id}] Document quality: {doc_quality}")
         logger.info(f"[{platform_user_id}] Selfie quality: {selfie_quality}")
+        
+        # 1.5 DETECT DOCUMENT TYPE AND EXTRACT FIELDS
+        document_type = detect_document_type(document_array)
+        logger.info(f"[{platform_user_id}] Detected document type: {document_type}")
+        
+        # Extract document fields (name, expiry_date, etc.)
+        doc_fields = extract_document_fields(document_array, document_type)
+        logger.info(f"[{platform_user_id}] Extracted fields: {doc_fields}")
+        
+        # Validate document expiry
+        expiry_valid, expiry_status = validate_document_expiry(doc_fields.get("expiry_date"))
+        logger.info(f"[{platform_user_id}] Document expiry validation: {expiry_status}")
+        
+        if not expiry_valid:
+            logger.warning(f"[{platform_user_id}] Document is expired")
+            elapsed = (time.time() - start_time) * 1000
+            return IdentityVerifyResponse(
+                verified=False,
+                match_score=0,
+                liveness_passed=False,
+                document_type=document_type,
+                face_extracted=False,
+                rejection_reason="document_expired",
+                processing_time_ms=elapsed
+            )
         
         # 2. EXTRACT FACE FROM DOCUMENT
         doc_face, doc_face_found, doc_confidence = extract_face_from_image(document_array)
@@ -190,7 +216,7 @@ async def verify_identity(
             verified=verified,
             match_score=match_score,
             liveness_passed=liveness_passed,
-            document_type="drivers_license",  # TODO: Extract actual document type from image
+            document_type=document_type,
             face_extracted=True,
             rejection_reason=rejection_reason,
             processing_time_ms=elapsed
