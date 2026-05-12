@@ -70,7 +70,7 @@ async def startup_event():
     logger.info("=" * 60)
     
     # Log environment
-    port = os.getenv("ML_PORT", "5000")
+    port = os.getenv("ML_PORT", "8080")
     logger.info(f"📡 ML Service port: {port}")
     
     # Log endpoints
