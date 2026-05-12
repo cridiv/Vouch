@@ -1,0 +1,9 @@
+{
+  "verified": true,
+  "match_score": 94.2,
+  "liveness_passed": true,
+  "document_type": "drivers_license",
+  "face_extracted": true,
+  "rejection_reason": null,
+  "processing_time_ms": 320
+}

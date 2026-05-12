@@ -1,0 +1,11 @@
+{
+  "score": 61,
+  "flag": "AMBER",
+  "category": "Elevated Risk",
+  "triggered_signals": [
+    "device_does_not_match_onboarding",
+    "location_distance_530km"
+  ],
+  "recommendation": "require_additional_verification",
+  "processing_time_ms": 84
+}

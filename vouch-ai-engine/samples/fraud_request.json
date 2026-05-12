@@ -1,0 +1,33 @@
+{
+  "transaction_id": "txn_abc123",
+  "user_id": "usr_xyz",
+  "ip_address": "197.210.84.1",
+  "ip_reputation_score": 82,
+  "is_vpn": false,
+  "is_proxy": false,
+  "geolocation": {
+    "country": "NG",
+    "city": "Lagos"
+  },
+  "onboarding_location": {
+    "country": "NG",
+    "city": "Abuja"
+  },
+  "location_distance_km": 530,
+  "impossible_travel": false,
+  "device_fingerprint": "fp_d3a9c1b2",
+  "device_seen_before": true,
+  "device_matches_onboarding": false,
+  "account_age_days": 14,
+  "previous_transactions": 3,
+  "transaction_amount": 150000,
+  "time_since_last_tx_hrs": 0.4,
+  "identity_verified": true,
+  "identity_match_score": 94.2,
+  "liveness_passed": true,
+  "squad_payment_channel": "card",
+  "squad_card_bin": "539983",
+  "squad_payer_name": "John Doe",
+  "squad_amount_matches_agreement": true,
+  "squad_transaction_ref": "SQD_abc123"
+}

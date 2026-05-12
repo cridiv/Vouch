@@ -1,0 +1,33 @@
+{
+  "transaction_id": "txn_vpn_demo",
+  "user_id": "usr_vpn_test",
+  "ip_address": "197.210.84.1",
+  "ip_reputation_score": 95,
+  "is_vpn": true,
+  "is_proxy": false,
+  "geolocation": {
+    "country": "US",
+    "city": "New York"
+  },
+  "onboarding_location": {
+    "country": "NG",
+    "city": "Lagos"
+  },
+  "location_distance_km": 9000,
+  "impossible_travel": true,
+  "device_fingerprint": "fp_different",
+  "device_seen_before": false,
+  "device_matches_onboarding": false,
+  "account_age_days": 1,
+  "previous_transactions": 0,
+  "transaction_amount": 1000000,
+  "time_since_last_tx_hrs": 0.1,
+  "identity_verified": true,
+  "identity_match_score": 94.2,
+  "liveness_passed": true,
+  "squad_payment_channel": "card",
+  "squad_card_bin": "539983",
+  "squad_payer_name": "Attacker Name",
+  "squad_amount_matches_agreement": true,
+  "squad_transaction_ref": "SQD_suspicious"
+}
