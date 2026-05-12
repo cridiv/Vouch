@@ -22,7 +22,7 @@ export class IpAnalysisService {
     ip_reputation_score: number;
     is_vpn: boolean;
     is_proxy: boolean;
-    geolocation: { country: string; city: string };
+    geolocation: { country: string; city: string; lat: number; lng: number };
   }> {
     try {
       const result = await this.proxyCheck.checkIP(ip, {
@@ -45,6 +45,8 @@ export class IpAnalysisService {
         geolocation: {
           country: ipData.country ?? 'Unknown',
           city: ipData.city ?? 'Unknown',
+          lat: typeof ipData.latitude === 'number' ? ipData.latitude : parseFloat(ipData.latitude) || 0,
+          lng: typeof ipData.longitude === 'number' ? ipData.longitude : parseFloat(ipData.longitude) || 0,
         },
       };
     } catch (error) {
@@ -61,7 +63,7 @@ export class IpAnalysisService {
       ip_reputation_score: 50,
       is_vpn: false,
       is_proxy: false,
-      geolocation: { country: 'NG', city: 'Unknown' },
+      geolocation: { country: 'NG', city: 'Unknown', lat: 0, lng: 0 },
     };
   }
 }

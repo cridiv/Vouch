@@ -18,6 +18,6 @@ import { ContextBuilderService } from './context/context-builder.service.js';
     IpAnalysisService,
     ContextBuilderService,
   ],
-  exports: [FraudService],
+  exports: [FraudService, IpAnalysisService],
 })
 export class FraudModule {}
