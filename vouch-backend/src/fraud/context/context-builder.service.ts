@@ -59,7 +59,7 @@ export class ContextBuilderService {
     const deviceData = await this.deviceService.analyze(deviceFingerprint, platformUserId);
 
     // Step 5: query squadSignal table
-    let latestSquadSignal = null;
+    let latestSquadSignal: any = null;
     if (agreementId) {
       latestSquadSignal = await this.prisma.squadSignal.findFirst({
         where: { agreementId },
