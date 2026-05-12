@@ -1,4 +1,4 @@
-# TrustLayer SDK — Team Brief
+# Vouch SDK — Team Brief
 ### Squad Hackathon 3.0 · Challenge 01: Proof of Life
 
 > **One-line pitch:** A plug-and-play trust infrastructure for digital transactions — we verify identity before onboarding, score fraud risk before every payment, and only move money through Squad when our AI says it is safe.

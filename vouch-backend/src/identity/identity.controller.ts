@@ -1,15 +1,19 @@
-import { Controller, Post, UseInterceptors, UploadedFiles, Body, BadRequestException, UseGuards } from '@nestjs/common';
+import { Controller, Post, UseInterceptors, UploadedFiles, Body, BadRequestException, UseGuards, Ip } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiKeyGuard } from '../developer/guard/api-key.guard.js';
 import { CurrentDeveloper } from '../common/decorators/current-developer.decorator.js';
 import * as client from '@prisma/client';
 import { IdentityService } from './identity.service.js';
-import { IsNotEmpty, IsString } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
 
 export class VerifyIdentityDto {
   @IsString()
   @IsNotEmpty()
   external_user_id: string;
+
+  @IsOptional()
+  @IsString()
+  device_fingerprint?: string;
 }
 
 @Controller('identity')
@@ -48,6 +52,7 @@ export class IdentityController {
     },
     @Body() body: VerifyIdentityDto,
     @CurrentDeveloper() developer: client.Developer,
+    @Ip() ip: string,
   ) {
     const docFile = files.document_image?.[0];
     const selfieFile = files.selfie_image?.[0];
@@ -62,6 +67,8 @@ export class IdentityController {
       selfieFile.buffer,
       body.external_user_id,
       developer,
+      ip,
+      body.device_fingerprint,
     );
 
     return {

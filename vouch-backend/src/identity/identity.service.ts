@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { DeveloperService } from '../developer/developer.service.js';
 import { DeveloperLogService } from '../common/services/developer-log.service.js';
 import { Developer } from '@prisma/client';
+import { IpAnalysisService } from '../fraud/context/ip-analysis.service.js';
 
 @Injectable()
 export class IdentityService {
@@ -10,6 +11,7 @@ export class IdentityService {
     private readonly prisma: PrismaService,
     private readonly developerService: DeveloperService,
     private readonly developerLogService: DeveloperLogService,
+    private readonly ipAnalysisService: IpAnalysisService,
   ) {}
 
   /**
@@ -22,6 +24,8 @@ export class IdentityService {
     selfieBuffer: Buffer,
     externalUserId: string,
     developer: Developer,
+    ipAddress: string,
+    deviceFingerprint?: string,
   ) {
     // 1. Resolve or create the platform user under this developer
     const platformUser = await this.developerService.resolveOrCreatePlatformUser(
@@ -42,7 +46,10 @@ export class IdentityService {
       rejection_reason: null as string | null,
     };
 
-    // 4. Store result on PlatformUser via prisma.platformUser.update()
+    // 4. Get IP location baseline
+    const ipData = await this.ipAnalysisService.analyze(ipAddress);
+
+    // 5. Store result on PlatformUser via prisma.platformUser.update()
     await this.prisma.platformUser.update({
       where: { id: platformUser.id },
       data: {
@@ -50,6 +57,13 @@ export class IdentityService {
         identityMatchScore: result.match_score,
         livenessPassed: result.liveness_passed,
         documentType: result.document_type,
+        deviceFingerprintAtOnboarding: deviceFingerprint,
+        onboardingLocation: {
+          country: ipData.geolocation.country,
+          city: ipData.geolocation.city,
+          lat: ipData.geolocation.lat,
+          lng: ipData.geolocation.lng,
+        },
       },
     });
 
