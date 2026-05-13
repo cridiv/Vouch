@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight } from "lucide-react";
 import React from "react";
 import { motion } from "framer-motion";
+import { Parallax } from "react-scroll-parallax";
 
 const container = {
   hidden: {},
