@@ -8,6 +8,7 @@ import { CommonModule } from './common/common.module';
 import { IdentityModule } from './identity/identity.module';
 import { FraudModule } from './fraud/fraud.module';
 import { SquadModule } from './squad/squad.module';
+import { EscrowModule } from './escrow/escrow.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SquadModule } from './squad/squad.module';
     IdentityModule,
     SquadModule,
     FraudModule,
+    EscrowModule,
   ],
   controllers: [HealthController],
 })
