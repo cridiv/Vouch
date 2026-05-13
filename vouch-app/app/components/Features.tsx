@@ -6,14 +6,7 @@ import VouchIdentitySVG from "./IdentityVerification";
 
 const Features = () => {
   return (
-    <section
-      style={{
-        backgroundImage:
-          "radial-gradient( circle, rgba(255, 255, 255, 0.5) 1px, transparent 1px )",
-        backgroundSize: "28px 28px",
-      }}
-      className="w-full py-24 px-8 bg-black"
-    >
+    <section className="w-full py-24 px-8 bg-black">
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-wrap justify-center gap-8 w-full">
           {/* Card 1 */}

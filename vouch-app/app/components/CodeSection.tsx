@@ -20,14 +20,7 @@ const line = {
 
 const CodeSection = () => {
   return (
-    <section
-      style={{
-        backgroundImage:
-          "radial-gradient( circle, rgba(255, 255, 255, 0.5) 1px, transparent 1px )",
-        backgroundSize: "28px 28px",
-      }}
-      className="w-full py-24 px-8 bg-black overflow-hidden relative"
-    >
+    <section className="w-full py-24 px-8 bg-black overflow-hidden relative">
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
         {/* Left Column: Text Content */}
         <div className="space-y-6">
