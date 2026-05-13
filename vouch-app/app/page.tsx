@@ -5,6 +5,7 @@ import Features from "./components/Features";
 import About from "./components/About";
 import HowItWorks from "./components/HowItWorks";
 import CtaCard from "./components/CtaCard";
+import Faqs from "./components/Faqs";
 
 export default function Home() {
   return (
@@ -16,6 +17,7 @@ export default function Home() {
       <HowItWorks />
       <CodeSection />
       <CtaCard />
+      <Faqs />
     </div>
   );
 }
