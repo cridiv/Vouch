@@ -5,9 +5,9 @@ import { EscrowStatus } from '@prisma/client';
 export class EscrowState {
   private readonly VALID_TRANSITIONS: Record<EscrowStatus, EscrowStatus[]> = {
     PENDING:     ['FUNDED', 'FROZEN'],
-    FUNDED:      ['IN_PROGRESS', 'FROZEN'],
-    IN_PROGRESS: ['COMPLETED', 'FROZEN'],
-    COMPLETED:   ['DISBURSED'],
+    FUNDED:      ['IN_PROGRESS', 'COMPLETED', 'DISBURSED', 'FROZEN'],
+    IN_PROGRESS: ['COMPLETED', 'DISBURSED', 'FROZEN'],
+    COMPLETED:   ['DISBURSED', 'FROZEN'],
     DISBURSED:   [],
     FROZEN:      [],
   };
