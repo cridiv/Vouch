@@ -3,6 +3,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import MagicRings from "./animations/MagicRings";
+import { motion } from "framer-motion";
 
 const Hero = () => {
   return (
@@ -38,20 +39,35 @@ const Hero = () => {
 
       <div className="max-w-5xl mx-auto space-y-8 mt-10 relative z-10">
         {/* Main Heading */}
-        <h1 className="text-3xl md:text-5xl font-syne tracking-tight text-white">
+        <motion.h1
+          initial={{ opacity: 0, filter: "blur(12px)", y: 15 }}
+          animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="text-3xl md:text-5xl font-syne tracking-tight text-white"
+        >
           <span className="font-bold">Trust</span> shouldn't be based on{" "}
           <span className="font-bold">Words</span>, it should be{" "}
           <span className="font-bold">Proven</span>.
-        </h1>
+        </motion.h1>
 
         {/* Subheading */}
-        <p className="text-lg md:text-xl text-gray-300 font-dm-sans max-w-2xl mx-auto leading-relaxed mt-4">
+        <motion.p
+          initial={{ opacity: 0, filter: "blur(12px)", y: 15 }}
+          animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+          className="text-lg md:text-xl text-gray-300 font-dm-sans max-w-2xl mx-auto leading-relaxed mt-4"
+        >
           <span className="underline"> A hyper-performant AI</span> verification
           engine that detects fraud and verifies proof of live
-        </p>
+        </motion.p>
 
         {/* Call to Action */}
-        <div className="flex items-center justify-center gap-4 pt-2">
+        <motion.div
+          initial={{ opacity: 0, filter: "blur(12px)", y: 15 }}
+          animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
+          transition={{ duration: 0.8, ease: "easeOut", delay: 0.4 }}
+          className="flex items-center justify-center gap-4 pt-2"
+        >
           <Button
             size="lg"
             className="bg-white text-black hover:bg-gray-200 px-8 py-6 text-lg font-syne transition-all shadow-lg hover:scale-102"
@@ -59,7 +75,7 @@ const Hero = () => {
           >
             Explore Documentation
           </Button>
-        </div>
+        </motion.div>
       </div>
     </section>
   );
