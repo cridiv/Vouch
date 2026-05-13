@@ -7,7 +7,7 @@ import { motion } from "framer-motion";
 
 const Hero = () => {
   return (
-    <section className="relative flex flex-col items-center justify-center min-h-[80vh] px-4 text-center w-full overflow-hidden">
+    <section className="relative flex flex-col items-center justify-center min-h-[90vh] px-4 text-center w-full overflow-hidden">
       {/* Background Animation */}
       <div className="absolute inset-0 z-0 opacity-50 flex items-center justify-center">
         <div className="w-full h-full max-w-7xl max-h-[1024px]">
@@ -37,7 +37,7 @@ const Hero = () => {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto space-y-8 mt-10 relative z-10">
+      <div className="max-w-5xl mx-auto space-y-8 mt-8 relative z-10">
         {/* Main Heading */}
         <motion.h1
           initial={{ opacity: 0, filter: "blur(12px)", y: 15 }}

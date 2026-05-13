@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 
 const Navbar = () => {
   return (
-    <nav className="w-full font-syne">
+    <nav className="w-full sticky top-0 z-50 backdrop-blur-md font-syne">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* 3-column Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-3 h-18 items-center text-sm">
