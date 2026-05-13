@@ -39,9 +39,9 @@ export class FraudService {
     // 2. Call ML Endpoint
     let result: FraudResultDto;
     try {
-      const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:5000';
+      const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:8080';
       const response = await lastValueFrom(
-        this.httpService.post(`${mlUrl}/fraud/assess`, context)
+        this.httpService.post(`${mlUrl}/fraud/assess`, context, { timeout: 30000 })
       );
       result = response.data;
     } catch (error) {

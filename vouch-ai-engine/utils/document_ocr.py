@@ -127,11 +127,9 @@ def extract_document_fields(image: np.ndarray, doc_type: str) -> Dict[str, Optio
         
         logger.info(f"Extracted fields: {fields}")
         
-    except ImportError:
-        logger.warning("pytesseract not available, using fallback pattern matching")
-        fields = _extract_fields_fallback(image)
     except Exception as e:
-        logger.error(f"Error extracting document fields: {e}")
+        logger.warning(f"pytesseract error or not available ({e}), using fallback pattern matching")
+        fields = _extract_fields_fallback(image)
     
     return fields
 

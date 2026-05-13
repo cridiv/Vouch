@@ -45,9 +45,10 @@ export class DeveloperService {
     });
 
     if (existingDeveloper) {
+      const apiKey = await this.generateApiKey(existingDeveloper.id, 'Harness Key');
       return {
         developer: existingDeveloper,
-        apiKey: null, // Raw key is shown once only and not stored
+        apiKey,
       };
     }
 
@@ -133,6 +134,104 @@ export class DeveloperService {
         developerId,
       },
     });
+  }
+
+  /**
+   * Retrieves a paginated list of DeveloperLog records, optionally filtered by eventType.
+   */
+  async getLogs(
+    developerId: string,
+    limit = 50,
+    offset = 0,
+    eventType?: string,
+  ) {
+    const where: any = { developerId };
+    if (eventType) {
+      where.eventType = eventType;
+    }
+
+    const [logs, total] = await Promise.all([
+      this.prisma.developerLog.findMany({
+        where,
+        take: Number(limit),
+        skip: Number(offset),
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.developerLog.count({ where }),
+    ]);
+
+    return { logs, total };
+  }
+
+  /**
+   * Retrieves a single DeveloperLog record.
+   */
+  async getLogById(id: string, developerId: string) {
+    return this.prisma.developerLog.findFirst({
+      where: {
+        id,
+        developerId,
+      },
+    });
+  }
+
+  /**
+   * Retrieves dashboard statistics for a developer.
+   */
+  async getStats(developerId: string) {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const [
+      totalChecksToday,
+      redBlocksToday,
+      identitiesVerifiedTotal,
+      activeAgreements,
+      escrowSum,
+    ] = await Promise.all([
+      this.prisma.fraudAssessment.count({
+        where: {
+          platformUser: { developerId },
+          createdAt: { gte: startOfToday },
+        },
+      }),
+      this.prisma.fraudAssessment.count({
+        where: {
+          platformUser: { developerId },
+          flag: 'RED',
+          createdAt: { gte: startOfToday },
+        },
+      }),
+      this.prisma.platformUser.count({
+        where: {
+          developerId,
+          identityVerified: true,
+        },
+      }),
+      this.prisma.agreement.count({
+        where: {
+          developerId,
+          status: { in: ['FUNDED', 'IN_PROGRESS'] },
+        },
+      }),
+      this.prisma.agreement.aggregate({
+        _sum: {
+          totalAmount: true,
+        },
+        where: {
+          developerId,
+          status: { in: ['FUNDED', 'IN_PROGRESS'] },
+        },
+      }),
+    ]);
+
+    return {
+      totalChecksToday,
+      redBlocksToday,
+      identitiesVerifiedTotal,
+      activeAgreements,
+      totalEscrowValue: escrowSum._sum.totalAmount || 0,
+    };
   }
 }
 

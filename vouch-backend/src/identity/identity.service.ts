@@ -1,17 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DeveloperService } from '../developer/developer.service.js';
 import { DeveloperLogService } from '../common/services/developer-log.service.js';
 import { Developer } from '@prisma/client';
 import { IpAnalysisService } from '../fraud/context/ip-analysis.service.js';
+import { HttpService } from '@nestjs/axios';
+import { lastValueFrom } from 'rxjs';
 
 @Injectable()
 export class IdentityService {
+  private readonly logger = new Logger(IdentityService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly developerService: DeveloperService,
     private readonly developerLogService: DeveloperLogService,
     private readonly ipAnalysisService: IpAnalysisService,
+    private readonly httpService: HttpService,
   ) {}
 
   /**
@@ -37,14 +42,39 @@ export class IdentityService {
     const documentBase64 = documentBuffer.toString('base64');
     const selfieBase64 = selfieBuffer.toString('base64');
 
-    // 3. STUB: return hardcoded result (TODO: REMOVE STUB — replace with real ML call)
-    const result = {
-      verified: true,
-      match_score: 94.2,
-      liveness_passed: true,
-      document_type: 'drivers_license',
-      rejection_reason: null as string | null,
+    // 3. Call ML Engine
+    const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:8080';
+    const formData = new FormData();
+    formData.append('platform_user_id', platformUser.id);
+    formData.append('document_image', new Blob([new Uint8Array(documentBuffer)], { type: 'image/png' }), 'document.png');
+    formData.append('selfie_image', new Blob([new Uint8Array(selfieBuffer)], { type: 'image/png' }), 'selfie.png');
+
+    let result: {
+      verified: boolean;
+      match_score: number;
+      liveness_passed: boolean;
+      document_type: string;
+      rejection_reason: string | null;
+      face_extracted?: boolean;
+      processing_time_ms?: number;
     };
+
+    try {
+      this.logger.log(`Calling ML Engine at ${mlUrl}/identity/verify for user ${platformUser.id}`);
+      const response = await lastValueFrom(
+        this.httpService.post(`${mlUrl}/identity/verify`, formData, { timeout: 30000 })
+      );
+      result = response.data;
+    } catch (error: any) {
+      this.logger.error(`ML Engine verification failed for user ${platformUser.id}:`, error?.response?.data || error.message);
+      result = {
+        verified: false,
+        match_score: 0,
+        liveness_passed: false,
+        document_type: 'unknown',
+        rejection_reason: 'ml_service_error',
+      };
+    }
 
     // 4. Get IP location baseline
     const ipData = await this.ipAnalysisService.analyze(ipAddress);
@@ -84,3 +114,4 @@ export class IdentityService {
     return result;
   }
 }
+

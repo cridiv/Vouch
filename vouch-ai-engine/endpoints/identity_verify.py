@@ -188,15 +188,15 @@ async def verify_identity(
                 processing_time_ms=elapsed
             )
         
-        # 5. FACE MATCHING
-        match_result = match_faces(doc_face, selfie_face, threshold=0.6)
+        # 5. FACE MATCHING (using cropped face arrays for precise biometric comparison)
+        match_result = match_faces(doc_face, selfie_face, threshold=0.75)
         match_score = match_result.get("match_score", 0)
         
         logger.info(f"[{platform_user_id}] Face match result: score={match_score}, {match_result}")
         
         # 6. DETERMINE VERIFICATION STATUS
         match_threshold = 85  # Per API_CONTRACT.md: threshold 85% = PASS
-        verified = match_score >= match_threshold and liveness_passed
+        verified = match_result.get("verified", False) and match_score >= match_threshold and liveness_passed
         
         rejection_reason = None
         if not verified:

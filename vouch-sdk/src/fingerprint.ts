@@ -11,6 +11,10 @@ export async function getDeviceFingerprint(): Promise<string> {
   // Cache it so FingerprintJS doesn't re-run on every call
   if (cachedFingerprint) return cachedFingerprint;
 
+  if (typeof window === 'undefined') {
+    return 'node-server-fingerprint';
+  }
+
   const fp = await FingerprintJS.load();
   const result = await fp.get();
   cachedFingerprint = result.visitorId;

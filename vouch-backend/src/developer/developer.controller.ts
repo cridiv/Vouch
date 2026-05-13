@@ -1,4 +1,4 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, UseGuards, Get, Param, Query, NotFoundException } from '@nestjs/common';
 import { DeveloperService } from './developer.service';
 import { IsEmail, IsNotEmpty, IsString, IsOptional } from 'class-validator';
 import { ApiKeyGuard } from './guard/api-key.guard';
@@ -46,5 +46,45 @@ export class DeveloperController {
       body.name,
     );
     return result; 
+  }
+
+  @Get('stats')
+  @UseGuards(ApiKeyGuard)
+  @HttpCode(HttpStatus.OK)
+  async getStats(
+    @CurrentDeveloper() developer: client.Developer,
+  ) {
+    return this.developerService.getStats(developer.id);
+  }
+
+  @Get('logs')
+  @UseGuards(ApiKeyGuard)
+  @HttpCode(HttpStatus.OK)
+  async getLogs(
+    @CurrentDeveloper() developer: client.Developer,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
+    @Query('eventType') eventType?: string,
+  ) {
+    return this.developerService.getLogs(
+      developer.id,
+      limit ? Number(limit) : 50,
+      offset ? Number(offset) : 0,
+      eventType,
+    );
+  }
+
+  @Get('logs/:id')
+  @UseGuards(ApiKeyGuard)
+  @HttpCode(HttpStatus.OK)
+  async getLogById(
+    @CurrentDeveloper() developer: client.Developer,
+    @Param('id') id: string,
+  ) {
+    const log = await this.developerService.getLogById(id, developer.id);
+    if (!log) {
+      throw new NotFoundException(`DeveloperLog with ID "${id}" not found.`);
+    }
+    return log;
   }
 }

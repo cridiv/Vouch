@@ -2,13 +2,6 @@
   "name": "vouch-sdk",
   "version": "1.0.0",
   "description": "TypeScript SDK client library for the Vouch (TrustLayer) platform",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "type": "module",
-  "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build"
-  },
   "keywords": [
     "vouch",
     "trust",
@@ -17,12 +10,20 @@
     "fraud",
     "identity"
   ],
-  "author": "Vouch Team",
   "license": "MIT",
-  "devDependencies": {
-    "typescript": "^5.3.3"
+  "author": "Vouch Team",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@fingerprintjs/fingerprintjs": "^5.2.0"
+    "@fingerprintjs/fingerprintjs": "^5.2.0",
+    "axios": "^1.16.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
   }
 }
