@@ -2,11 +2,41 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
+import MagicRings from "./animations/MagicRings";
 
 const Hero = () => {
   return (
-    <section className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center w-full">
-      <div className="max-w-5xl mx-auto space-y-8 mt-10">
+    <section className="relative flex flex-col items-center justify-center min-h-[80vh] px-4 text-center w-full overflow-hidden">
+      {/* Background Animation */}
+      <div className="absolute inset-0 z-0 opacity-50 flex items-center justify-center">
+        <div className="w-full h-full max-w-7xl max-h-[1024px]">
+          <MagicRings
+            color="#58A0B4"
+            colorTwo="#FFFFFF"
+            ringCount={6}
+            speed={1}
+            attenuation={20}
+            lineThickness={2}
+            baseRadius={0.35}
+            radiusStep={0.1}
+            scaleRate={0.2}
+            opacity={1}
+            blur={0}
+            noiseAmount={0.1}
+            rotation={0}
+            ringGap={1.5}
+            fadeIn={0.7}
+            fadeOut={0.5}
+            followMouse={false}
+            mouseInfluence={0}
+            hoverScale={1}
+            parallax={0.05}
+            clickBurst={false}
+          />
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto space-y-8 mt-10 relative z-10">
         {/* Main Heading */}
         <h1 className="text-3xl md:text-5xl font-syne tracking-tight text-white">
           <span className="font-bold">Trust</span> shouldn't be based on{" "}
