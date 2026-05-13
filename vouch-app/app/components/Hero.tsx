@@ -58,7 +58,7 @@ const Hero = () => {
           className="text-lg md:text-xl text-gray-300 font-dm-sans max-w-2xl mx-auto leading-relaxed mt-4"
         >
           <span className="underline"> A hyper-performant AI</span> verification
-          engine that detects fraud and verifies proof of live
+          engine that detects fraud and verifies proof of liveness
         </motion.p>
 
         {/* Call to Action */}
