@@ -52,7 +52,7 @@ const CodeSection = () => {
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.6, delay: 0.2, ease: "easeOut" }}
           >
-            <Button className="font-syne mt-4 pl-8">
+            <Button className="font-syne px-8 py-6 text-lg mt-4 pl-8">
               Try Now <ChevronRight />
             </Button>
           </motion.div>
