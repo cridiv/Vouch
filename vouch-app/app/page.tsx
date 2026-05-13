@@ -6,6 +6,7 @@ import About from "./components/About";
 import HowItWorks from "./components/HowItWorks";
 import CtaCard from "./components/CtaCard";
 import Faqs from "./components/Faqs";
+import Footer from "./components/Footer";
 
 export default function Home() {
   return (
@@ -18,6 +19,7 @@ export default function Home() {
       <CodeSection />
       <CtaCard />
       <Faqs />
+      <Footer />
     </div>
   );
 }
