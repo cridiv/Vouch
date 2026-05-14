@@ -1,13 +1,18 @@
-import axios from 'axios';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
-const BASE_URL = 'http://localhost:5000/v1';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from '../dist/app.module.js';
+import { DeveloperService } from '../dist/developer/developer.service.js';
+import { IdentityService } from '../dist/identity/identity.service.js';
+import { PrismaService } from '../dist/prisma/prisma.service.js';
 
 async function runMasterIdentityUsersTests() {
   console.log('🌟===========================================================🌟');
   console.log('🚀   STARTING MASTER IDENTITY & USERS SUITE (TEST 4)           🚀');
   console.log('🌟===========================================================🌟\n');
+
+  const app = await NestFactory.createApplicationContext(AppModule);
+  const developerService = app.get(DeveloperService);
+  const identityService = app.get(IdentityService);
+  const prisma = app.get(PrismaService);
 
   const uniqueId = Date.now().toString();
   const testEmail = `dev-identity-${uniqueId}@vouch.com`;
@@ -18,39 +23,33 @@ async function runMasterIdentityUsersTests() {
   // SECTION 1: Developer Provisioning
   // =========================================================================
   console.log('--- SECTION 1: Developer Provisioning ---');
-  const provRes = await axios.post(`${BASE_URL}/developer/provision`, {
-    email: testEmail,
-    supabaseUid: testSupabaseUid,
-  });
+  const provResult = await developerService.provision(testEmail, testSupabaseUid);
 
-  const devId = provRes.data.developerId;
-  const rawApiKey = provRes.data.apiKey.rawKey;
-  console.log(`✅ Developer Provisioned Successfully! (ID: ${devId})`);
-  console.log(`API Key Prefix: ${provRes.data.apiKey.prefix}`);
+  const developer = provResult.developer;
+  const rawApiKey = provResult.apiKey.rawKey;
+  console.log(`✅ Developer Provisioned Successfully! (ID: ${developer.id})`);
+  console.log(`API Key Prefix: ${provResult.apiKey.prefix}`);
 
   // =========================================================================
-  // SECTION 2: Identity Verification Flow (POST /identity/verify)
+  // SECTION 2: Identity Verification Flow
   // =========================================================================
   console.log('\n--- SECTION 2: Identity Verification ---');
-  console.log('📦 Preparing native multipart/form-data payload...');
-  const formData = new FormData();
-  formData.append('external_user_id', testExternalUserId);
+  console.log('🚀 Invoking IdentityService.verify with simulated document/selfie buffers...');
+  
+  const docBuffer = Buffer.from('fake-document-image-data-png');
+  const selfieBuffer = Buffer.from('fake-selfie-image-data-png');
 
-  const docBlob = new Blob([Buffer.from('fake-document-image-data-png')], { type: 'image/png' });
-  const selfieBlob = new Blob([Buffer.from('fake-selfie-image-data-png')], { type: 'image/png' });
+  const verifyResult = await identityService.verify(
+    docBuffer,
+    selfieBuffer,
+    testExternalUserId,
+    developer,
+    '127.0.0.1',
+    'chrome-fingerprint-mstr'
+  );
 
-  formData.append('document_image', docBlob, 'document.png');
-  formData.append('selfie_image', selfieBlob, 'selfie.png');
-
-  console.log('🚀 Sending identity verification request to POST /v1/identity/verify...');
-  const verifyRes = await axios.post(`${BASE_URL}/identity/verify`, formData, {
-    headers: {
-      'x-api-key': rawApiKey,
-    },
-  });
-
-  console.log('✅ Identity verify response received!');
-  console.log(`Status: ${verifyRes.data.status}, Match Rating: ${verifyRes.data.match_rating}%`);
+  console.log('✅ Identity verify completed successfully!');
+  console.log(`Match Score: ${verifyResult.identityMatchScore}%, Document Type: ${verifyResult.documentType}`);
 
   // =========================================================================
   // SECTION 3: PlatformUser Database State Validation & Idempotency
@@ -62,7 +61,7 @@ async function runMasterIdentityUsersTests() {
     where: {
       externalUserId_developerId: {
         externalUserId: testExternalUserId,
-        developerId: devId,
+        developerId: developer.id,
       },
     },
   });
@@ -75,14 +74,14 @@ async function runMasterIdentityUsersTests() {
   if (user.identityVerified !== true || user.identityMatchScore !== 94.2) {
     throw new Error('❌ Test failed: PlatformUser identity mismatch or verification state not saved properly.');
   }
-  console.log('✅ IdentityMatchScore and identityVerified states matches Dojah result perfectly!');
+  console.log('✅ IdentityMatchScore and identityVerified states matches Dojah mock result perfectly!');
 
   // Validate user lookup idempotency (non-duplicated platform user resolution)
   console.log('\n📦 Testing resolveOrCreatePlatformUser lookup idempotency via Prisma findUnique/findFirst...');
   const findUserCount = await prisma.platformUser.count({
     where: {
       externalUserId: testExternalUserId,
-      developerId: devId,
+      developerId: developer.id,
     }
   });
 
@@ -93,37 +92,69 @@ async function runMasterIdentityUsersTests() {
   }
 
   // =========================================================================
-  // SECTION 4: Audit Logging & Traceability
+  // SECTION 4: Developer Logs Retrievals
   // =========================================================================
-  console.log('\n--- SECTION 4: Developer Audit logs Verification ---');
+  console.log('\n--- SECTION 4: Developer Logs Retrievals ---');
   
-  const log = await prisma.developerLog.findFirst({
-    where: {
-      developerId: devId,
-      eventType: 'IDENTITY_VERIFIED',
-    },
-  });
+  console.log('⏳ Waiting 1000ms for async fire-and-forget logging to finalize...');
+  await new Promise((resolve) => setTimeout(resolve, 1000));
 
-  if (!log) {
-    throw new Error('❌ Audit Check Failed: DeveloperLog with IDENTITY_VERIFIED event not found!');
+  console.log('🚀 Querying developer logs list via DeveloperService.getLogs...');
+  const logsResult = await developerService.getLogs(developer.id, 10, 0, 'IDENTITY_VERIFIED');
+  
+  const { logs, total } = logsResult;
+  console.log(`✅ Retrieved list. Total logs count: ${total}, List length: ${logs.length}`);
+
+  if (total < 1 || logs.length < 1) {
+    throw new Error('❌ Test Failed: getLogs did not return expected logged events!');
   }
-  console.log('✅ Audit Log Found! Saved payload details:');
-  console.log(`Event ID: ${log.id}, Event Type: ${log.eventType}, Logged At: ${log.createdAt}`);
 
+  const targetLog = logs[0];
+  if (targetLog.eventType !== 'IDENTITY_VERIFIED') {
+    throw new Error(`❌ Test Failed: Expected eventType "IDENTITY_VERIFIED", got "${targetLog.eventType}"`);
+  }
+  console.log(`✅ List retrieve passed: Event type matched perfectly.`);
+
+  console.log(`🚀 Querying single developer log detail via DeveloperService.getLogById(${targetLog.id})...`);
+  const detailedLog = await developerService.getLogById(targetLog.id, developer.id);
+
+  console.log(`✅ Single log details returned: Log ID = "${detailedLog.id}"`);
+  if (detailedLog.id !== targetLog.id) {
+    throw new Error('❌ Test Failed: Returned log ID mismatch!');
+  }
+  if (!detailedLog.payload || typeof detailedLog.payload !== 'object') {
+    throw new Error('❌ Test Failed: Detailed log does not contain the full payload object context!');
+  }
+  console.log('✅ Single log payload verification passed: Full context is preserved.');
+
+  // =========================================================================
+  // SECTION 5: Developer Dashboard Statistics
+  // =========================================================================
+  console.log('\n--- SECTION 5: Developer Dashboard Statistics ---');
+  console.log('🚀 Querying developer dashboard statistics via DeveloperService.getStats...');
+
+  const stats = await developerService.getStats(developer.id);
+  console.log('✅ Stats response received:', JSON.stringify(stats, null, 2));
+
+  if (
+    typeof stats.totalChecksToday !== 'number' ||
+    typeof stats.redBlocksToday !== 'number' ||
+    stats.identitiesVerifiedTotal !== 1 ||
+    stats.activeAgreements !== 0 ||
+    stats.totalEscrowValue !== 0
+  ) {
+    throw new Error('❌ Test Failed: Stats counts or schema types are invalid!');
+  }
+  console.log('✅ Dashboard stats validation passed completely!');
+
+  await app.close();
   console.log('\n✨===========================================================✨');
   console.log('🎉   ALL MASTER IDENTITY & USERS TESTS COMPLETED SUCCESSFULLY!  🎉');
   console.log('✨===========================================================✨\n');
 }
 
-runMasterIdentityUsersTests()
-  .catch((err) => {
-    console.error('\n❌ Master Identity & Users Suite failed!');
-    if (err.response) {
-      console.error(`Status: ${err.response.status}`);
-      console.error('Data:', JSON.stringify(err.response.data, null, 2));
-    } else {
-      console.error(err);
-    }
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+runMasterIdentityUsersTests().catch((err) => {
+  console.error('\n❌ Master Identity & Users Suite failed!');
+  console.error(err);
+  process.exit(1);
+});

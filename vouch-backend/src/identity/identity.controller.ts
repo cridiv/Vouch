@@ -71,10 +71,6 @@ export class IdentityController {
       body.device_fingerprint,
     );
 
-    return {
-      status: 'success',
-      message: 'Buffers successfully processed and platform user resolved.',
-      data: result,
-    };
+    return result;
   }
 }
