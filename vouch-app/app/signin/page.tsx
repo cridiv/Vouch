@@ -45,7 +45,10 @@ const SignInPage = () => {
       if (error) throw error;
     } catch (err: any) {
       console.error("Supabase Auth Error:", err);
-      setErrorMsg(err.message || "Failed to connect to GitHub authentication. Please try again.");
+      setErrorMsg(
+        err.message ||
+          "Failed to connect to GitHub authentication. Please try again.",
+      );
       setIsLoading(false);
     }
   };
@@ -68,17 +71,17 @@ const SignInPage = () => {
         </div>
       </nav>
 
-      <main className="flex flex-1 flex-col items-center justify-center w-full px-4">
-        <div className="flex w-full max-w-[30rem] flex-col items-center gap-10 rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-transparent px-8 py-12 shadow-2xl backdrop-blur-xl relative overflow-hidden">
+      <main className="flex flex-1 flex-col items-center justify-center w-full">
+        <div className="flex w-full max-w-[28rem] flex-col items-center gap-12 rounded-3xl px-8 py-8 shadow-2xl relative overflow-hidden">
           {/* Header */}
           <div className="flex flex-col items-center gap-4 text-center z-10 w-full">
-            <div className="inline-flex items-center px-3 py-1 rounded-full bg-[#58A0B4]/10 text-[#58A0B4] text-xs font-dm-sans mb-2 border border-[#58A0B4]/20">
+            <div className="inline-flex items-center px-3 py-1 bg-[#58A0B4]/10 text-[#58A0B4] text-xs font-dm-sans mb-2 border border-[#58A0B4]/20">
               Developer Portal
             </div>
-            <h1 className="text-3xl md:text-5xl font-syne font-bold tracking-tight">
+            <h1 className="text-3xl md:text-5xl font-syne font-bold tracking-tight mb-8">
               Sign In to Vouch
             </h1>
-            <p className="text-base font-dm-sans text-gray-400 max-w-sm mt-2">
+            <p className="text-lg font-dm-sans text-gray-400">
               The platform for building absolute trust down to the programmatic
               level.
             </p>
@@ -94,7 +97,7 @@ const SignInPage = () => {
           <div className="flex w-full flex-col gap-4 z-10">
             <Button
               disabled={isLoading}
-              className="bg-white text-black hover:bg-gray-200 px-8 py-7 text-lg font-syne font-semibold transition-all shadow-[0_0_30px_rgba(255,255,255,0.15)] hover:shadow-[0_0_35px_rgba(255,255,255,0.3)] flex items-center justify-center rounded-xl cursor-pointer"
+              className="bg-white text-black hover:bg-gray-200 px-8 py-6 text-lg font-syne transition-all shadow-lg hover:scale-102"
               onClick={handleGithubLogin}
             >
               {isLoading ? (
@@ -113,8 +116,8 @@ const SignInPage = () => {
         </div>
 
         {/* Global Footer Links */}
-        <div className="mt-12 flex gap-8 text-xs text-gray-500 font-dm-sans tracking-wide">
-          <Link href="#" className="hover:text-gray-300 transition-colors">
+        <div className="mt-8 flex gap-6 text-xs text-gray-600 font-dm-sans">
+          <Link href="#" className="hover:text-gray-400 transition-colors">
             Privacy Policy
           </Link>
           <Link href="#" className="hover:text-gray-300 transition-colors">

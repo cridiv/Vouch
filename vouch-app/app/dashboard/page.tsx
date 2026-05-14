@@ -3,9 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import {
-  ButtonGroup,
-} from "@/components/ui/button-group";
+import { ButtonGroup } from "@/components/ui/button-group";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,7 +15,16 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { LogOut, User, Key, CheckCircle, Shield, Copy, RefreshCw, AlertTriangle } from "lucide-react";
+import {
+  LogOut,
+  User,
+  Key,
+  CheckCircle,
+  Shield,
+  Copy,
+  RefreshCw,
+  AlertTriangle,
+} from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
 const DashboardPage = () => {
@@ -34,30 +41,43 @@ const DashboardPage = () => {
         setAuthError(null);
 
         // 1. Check actual production Supabase session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
 
         const user = session?.user;
 
         if (user) {
           setUserData(user);
-          
+
           // 2. Provision developer account in Vouch Backend
-          const res = await fetch("http://localhost:5000/v1/developer/provision", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: user.email || "developer@github.com",
-              supabaseUid: user.id,
-              name: user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")[0] || "GitHub Developer",
-              avatarUrl: user.user_metadata?.avatar_url || "",
-              metadata: user.user_metadata || {},
-            }),
-          });
+          const res = await fetch(
+            "http://localhost:5000/v1/developer/provision",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: user.email || "developer@github.com",
+                supabaseUid: user.id,
+                name:
+                  user.user_metadata?.full_name ||
+                  user.user_metadata?.name ||
+                  user.email?.split("@")[0] ||
+                  "GitHub Developer",
+                avatarUrl: user.user_metadata?.avatar_url || "",
+                metadata: user.user_metadata || {},
+              }),
+            },
+          );
 
           const data = await res.json();
           if (!res.ok) {
-            throw new Error(data.message || "Failed to provision developer account in Vouch backend.");
+            throw new Error(
+              data.message ||
+                "Failed to provision developer account in Vouch backend.",
+            );
           }
 
           setProvisionData(data);
@@ -68,7 +88,10 @@ const DashboardPage = () => {
         }
       } catch (err: any) {
         console.error("Dashboard Auth Error:", err);
-        setAuthError(err.message || "Authentication verification failed. Please log in again.");
+        setAuthError(
+          err.message ||
+            "Authentication verification failed. Please log in again.",
+        );
       } finally {
         setIsProvisioning(false);
       }
@@ -119,7 +142,9 @@ const DashboardPage = () => {
                   ) : (
                     <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
                   )}
-                  <span>{userData.user_metadata?.full_name || userData.email}</span>
+                  <span>
+                    {userData.user_metadata?.full_name || userData.email}
+                  </span>
                 </div>
               )}
 
@@ -137,7 +162,11 @@ const DashboardPage = () => {
                 <ButtonGroup>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="icon-lg" className="hover:bg-red-600 cursor-pointer">
+                      <Button
+                        variant="destructive"
+                        size="icon-lg"
+                        className="hover:bg-red-600 cursor-pointer"
+                      >
                         <LogOut className="w-4 h-4" />
                       </Button>
                     </AlertDialogTrigger>
@@ -175,8 +204,12 @@ const DashboardPage = () => {
         {isProvisioning ? (
           <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
             <RefreshCw className="w-8 h-8 text-[#58A0B4] animate-spin" />
-            <h2 className="text-xl font-syne font-semibold">Provisioning Developer Hub...</h2>
-            <p className="text-gray-400 text-sm">Authenticating with GitHub & Supabase identity</p>
+            <h2 className="text-xl font-syne font-semibold">
+              Provisioning Developer Hub...
+            </h2>
+            <p className="text-gray-400 text-sm">
+              Authenticating with GitHub & Supabase identity
+            </p>
           </div>
         ) : authError ? (
           <div className="flex flex-col items-center justify-center min-h-[50vh] gap-6 text-center max-w-md mx-auto animate-fade-in">
@@ -184,7 +217,9 @@ const DashboardPage = () => {
               <AlertTriangle className="w-8 h-8" />
             </div>
             <div>
-              <h2 className="text-2xl font-syne font-bold">Authentication Error</h2>
+              <h2 className="text-2xl font-syne font-bold">
+                Authentication Error
+              </h2>
               <p className="text-gray-400 text-sm mt-2">{authError}</p>
             </div>
             <Button
@@ -203,7 +238,10 @@ const DashboardPage = () => {
                   Developer Dashboard
                 </h1>
                 <p className="text-gray-400 mt-1">
-                  Welcome back, <span className="text-white font-mono">{userData?.email}</span>
+                  Welcome back,{" "}
+                  <span className="text-white font-mono">
+                    {userData?.email}
+                  </span>
                 </p>
               </div>
               <div className="flex items-center gap-3 bg-[#58A0B4]/10 border border-[#58A0B4]/20 px-4 py-2 rounded-xl text-sm font-mono text-[#58A0B4]">
@@ -215,7 +253,9 @@ const DashboardPage = () => {
             {/* Grid Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 font-syne">
               <div className="p-6 rounded-2xl bg-gradient-to-br from-white/[0.08] to-transparent border border-white/10 backdrop-blur-md relative overflow-hidden group hover:border-[#58A0B4]/40 transition-all">
-                <div className="text-sm font-dm-sans text-gray-400 mb-2">Total API Requests</div>
+                <div className="text-sm font-dm-sans text-gray-400 mb-2">
+                  Total API Requests
+                </div>
                 <div className="text-4xl font-bold tracking-tight">1,492</div>
                 <div className="text-xs font-dm-sans text-green-400 mt-2 flex items-center gap-1">
                   <span>↑ 12% from last week</span>
@@ -226,18 +266,28 @@ const DashboardPage = () => {
               </div>
 
               <div className="p-6 rounded-2xl bg-gradient-to-br from-white/[0.08] to-transparent border border-white/10 backdrop-blur-md relative overflow-hidden group hover:border-green-500/40 transition-all">
-                <div className="text-sm font-dm-sans text-gray-400 mb-2">Verified Identities</div>
-                <div className="text-4xl font-bold tracking-tight text-white">384</div>
-                <div className="text-xs font-dm-sans text-gray-500 mt-2">Active platform users</div>
+                <div className="text-sm font-dm-sans text-gray-400 mb-2">
+                  Verified Identities
+                </div>
+                <div className="text-4xl font-bold tracking-tight text-white">
+                  384
+                </div>
+                <div className="text-xs font-dm-sans text-gray-500 mt-2">
+                  Active platform users
+                </div>
                 <div className="absolute top-4 right-4 w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center text-green-400 group-hover:scale-110 transition-transform">
                   <CheckCircle className="w-5 h-5" />
                 </div>
               </div>
 
               <div className="p-6 rounded-2xl bg-gradient-to-br from-white/[0.08] to-transparent border border-white/10 backdrop-blur-md relative overflow-hidden group hover:border-[#58A0B4]/40 transition-all">
-                <div className="text-sm font-dm-sans text-gray-400 mb-2">Active Agreements</div>
+                <div className="text-sm font-dm-sans text-gray-400 mb-2">
+                  Active Agreements
+                </div>
                 <div className="text-4xl font-bold tracking-tight">24</div>
-                <div className="text-xs font-dm-sans text-[#58A0B4] mt-2">Funded & In Progress</div>
+                <div className="text-xs font-dm-sans text-[#58A0B4] mt-2">
+                  Funded & In Progress
+                </div>
                 <div className="absolute top-4 right-4 w-10 h-10 rounded-full bg-[#58A0B4]/10 flex items-center justify-center text-[#58A0B4] group-hover:scale-110 transition-transform">
                   <Shield className="w-5 h-5" />
                 </div>
@@ -248,9 +298,12 @@ const DashboardPage = () => {
             <div className="p-8 rounded-3xl bg-gradient-to-b from-white/[0.08] to-transparent border border-white/10 backdrop-blur-xl space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-2xl font-syne font-bold tracking-tight">API Credentials</h2>
+                  <h2 className="text-2xl font-syne font-bold tracking-tight">
+                    API Credentials
+                  </h2>
                   <p className="text-sm text-gray-400 mt-1">
-                    Use this secret key to authenticate SDK requests to the Vouch Trust Engine.
+                    Use this secret key to authenticate SDK requests to the
+                    Vouch Trust Engine.
                   </p>
                 </div>
               </div>
@@ -285,8 +338,13 @@ const DashboardPage = () => {
               </div>
 
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs font-dm-sans flex items-center gap-3">
-                <span className="font-bold uppercase tracking-wider">Security Notice:</span>
-                <span>Keep your API key secure. Never expose it in client-side public code or repositories.</span>
+                <span className="font-bold uppercase tracking-wider">
+                  Security Notice:
+                </span>
+                <span>
+                  Keep your API key secure. Never expose it in client-side
+                  public code or repositories.
+                </span>
               </div>
             </div>
           </div>
