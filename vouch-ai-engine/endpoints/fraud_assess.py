@@ -217,7 +217,7 @@ async def assess_fraud(context: FraudAssessRequest):
         
         # Ensemble
         if ml_score is not None:
-            final_score = int(0.45 * rule_score + 0.55 * ml_score)
+            final_score = int(0.65 * rule_score + 0.35 * ml_score)
         else:
             final_score = rule_score
         
