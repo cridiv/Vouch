@@ -12,7 +12,7 @@ const Footer = () => {
         <div>
           <div className="font-syne text-xl font-bold tracking-tight">
             {`{`} vouch {`}`}
-            <span className="text-[#58A0B4]">. </span>sdk
+            <span className="text-[#58A0B4]">.</span>sdk
           </div>
           <div className="text-sm text-gray-400 mt-2 leading-relaxed font-dm-sans">
             The absolute trust engine.

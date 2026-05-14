@@ -129,6 +129,41 @@
   }
 }
 
+* {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: "dm-sans", "sans-serif";
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c9cccf;
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #959799;
+}
+
+/* custom text select */
+::selection {
+  background-color: #58a0b46c;
+  color: #fff;
+}
+
+/* For older Firefox versions */
+::-moz-selection {
+  background-color: #58a0b46c;
+  color: #fff;
 }
