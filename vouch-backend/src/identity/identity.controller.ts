@@ -71,6 +71,17 @@ export class IdentityController {
       body.device_fingerprint,
     );
 
-    return result;
+    return {
+      status: result.verified ? 'success' : 'failed',
+      message: result.verified ? 'Identity verified successfully' : 'Identity verification unsuccessful',
+      data: {
+        id: 'usr_' + Date.now(),
+        externalUserId: body.external_user_id,
+        identityVerified: result.verified,
+        identityMatchScore: result.match_score,
+        livenessPassed: result.liveness_passed,
+        documentType: result.document_type,
+      },
+    };
   }
 }

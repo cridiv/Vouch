@@ -76,55 +76,49 @@ def extract_face_from_image(image: np.ndarray) -> Tuple[Optional[np.ndarray], bo
 
 
 def match_faces(face1, face2, threshold=0.6):
+    start_time = time.time()
     try:
+        _load_deepface()
         if face1 is None or face2 is None:
             return {"match_score": 0, "verified": False}
         
+        # Use ArcFace for superior biometric separation between ID cards and selfies
         result = DeepFace.verify(
-<<<<<<< Updated upstream
             img1_path=face1,
             img2_path=face2,
-            model_name="Facenet",
+            model_name="ArcFace",
+            detector_backend="skip",
             enforce_detection=False
         )
         
-        distance = result['distance']
-        verified = result['verified']
+        distance = result.get('distance', 1.0)
+        verified = result.get('verified', False)
         
-        # Biometric evaluation curve calibrated for webcam selfies vs ID cards
-        if distance <= 0.75 or verified:
+        # ArcFace standard verification threshold is 0.68.
+        # Genuine matches are typically distance 0.20 - 0.55. Mismatches are 0.75 - 0.95.
+        threshold_dist = 0.68
+        if distance <= threshold_dist or verified:
             verified = True
-            match_score = int(85 + ((0.75 - distance) / 0.75) * 14)
+            # Map distance [0, threshold] to score [85, 99]
+            match_score = int(85 + ((threshold_dist - distance) / threshold_dist) * 14)
         else:
             verified = False
-            match_score = int((1.0 - distance) * 100)
+            # Map distance (threshold, 1.0] to score [0, 50]
+            match_score = max(0, int(50 * (1.0 - distance) / (1.0 - threshold_dist)))
         
         match_score = max(0, min(99, match_score))
         
         elapsed = time.time() - start_time
-        logger.info(f"Face match result: score={match_score}, verified={verified}, time={elapsed:.2f}s")
+        logger.info(f"Face match result: score={match_score}, verified={verified}, distance={distance:.4f}, time={elapsed:.2f}s")
         
         return {
             "match_score": match_score,
             "verified": verified,
             "distance": float(distance),
-            "model": "Facenet",
+            "model": "ArcFace",
             "processing_time_ms": elapsed * 1000
         }
-    
-=======
-            img1_path=face1, 
-            img2_path=face2, 
-            model_name="ArcFace",  # Strong performer
-            detector_backend="skip",
-            enforce_detection=False
-        )
-        distance = result.get('distance', 1.0)
-        match_score = max(0, int(100 * (1 - distance)))  # Proper conversion
-        return {"match_score": match_score, "verified": match_score >= 85}
->>>>>>> Stashed changes
     except Exception as e:
         logger.error(f"Face matching error: {e}")
-        return {"match_score": 40, "verified": False}  # Safe low fallback for mismatches
-    """
+        return {"match_score": 35, "verified": False}
     
