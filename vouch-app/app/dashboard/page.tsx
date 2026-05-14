@@ -90,7 +90,7 @@ const DashboardPage = () => {
           localStorage.setItem("vouch_api_key", data.apiKey?.rawKey || "");
           localStorage.setItem("vouch_dev_id", data.developerId || "");
         } else {
-          //  window.location.href = "/signin";
+          window.location.href = "/signin";
         }
       } catch (err: any) {
         console.error("Dashboard Auth Error:", err);
