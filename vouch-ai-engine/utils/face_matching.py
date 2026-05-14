@@ -80,9 +80,9 @@ def match_faces(face1, face2, threshold=0.6):
     try:
         _load_deepface()
         if face1 is None or face2 is None:
-            return {"match_score": 0, "verified": False}
+            logger.warning("Face comparison skipped: one or both faces are None")
+            return {"match_score": 0, "verified": False, "distance": 1.0, "model": "Facenet", "processing_time_ms": 0}
         
-        # Use ArcFace for superior biometric separation between ID cards and selfies
         result = DeepFace.verify(
             img1_path=face1,
             img2_path=face2,
@@ -107,7 +107,6 @@ def match_faces(face1, face2, threshold=0.6):
             match_score = max(0, int(50 * (1.0 - distance) / (1.0 - threshold_dist)))
         
         match_score = max(0, min(99, match_score))
-        
         elapsed = time.time() - start_time
         logger.info(f"Face match result: score={match_score}, verified={verified}, distance={distance:.4f}, time={elapsed:.2f}s")
         

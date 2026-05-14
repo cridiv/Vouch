@@ -1,7 +1,3 @@
-"""
-Identity Verification Endpoint
-Handles document verification, face extraction, liveness detection, and face matching
-"""
 
 import logging
 import time
