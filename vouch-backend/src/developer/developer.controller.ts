@@ -11,6 +11,17 @@ export class ProvisionDeveloperDto {
   @IsString()
   @IsNotEmpty()
   supabaseUid: string;
+
+  @IsString()
+  @IsOptional()
+  name?: string;
+
+  @IsString()
+  @IsOptional()
+  avatarUrl?: string;
+
+  @IsOptional()
+  metadata?: any;
 }
 
 export class GenerateApiKeyDto {
@@ -27,10 +38,17 @@ export class DeveloperController {
   @Post('provision')
   @HttpCode(HttpStatus.OK)
   async provision(@Body() body: ProvisionDeveloperDto) {
-    const result = await this.developerService.provision(body.email, body.supabaseUid);
+    const result = await this.developerService.provision(
+      body.email,
+      body.supabaseUid,
+      body.name,
+      body.avatarUrl,
+      body.metadata,
+    );
     return {
       developerId: result.developer.id,
       apiKey: result.apiKey,
+      developer: result.developer,
     };
   }
 

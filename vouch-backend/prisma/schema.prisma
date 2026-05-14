@@ -12,6 +12,9 @@ model Developer {
   id          String   @id @default(uuid())
   email       String   @unique
   supabaseUid String   @unique
+  name        String?
+  avatarUrl   String?
+  metadata    Json?
   createdAt   DateTime @default(now())
 
   apiKeys      ApiKey[]

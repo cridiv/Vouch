@@ -1,9 +1,9 @@
 "use client";
 
-import React from "react";
-import Navbar from "../components/Navbar";
+import React, { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import Link from "next/dist/client/link";
+import { supabase } from "../../lib/supabase";
 
 const GithubIcon = () => {
   return (
@@ -11,6 +11,7 @@ const GithubIcon = () => {
       fill="#000000"
       viewBox="0 -0.5 25 25"
       xmlns="http://www.w3.org/2000/svg"
+      className="w-6 h-6 mr-3"
     >
       <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
       <g
@@ -25,15 +26,35 @@ const GithubIcon = () => {
   );
 };
 
-const page = () => {
+const SignInPage = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleGithubLogin = async () => {
+    try {
+      setIsLoading(true);
+      setErrorMsg(null);
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "github",
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`,
+        },
+      });
+
+      if (error) throw error;
+    } catch (err: any) {
+      console.error("Supabase Auth Error:", err);
+      setErrorMsg(err.message || "Failed to connect to GitHub authentication. Please try again.");
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col font-syne bg-black text-white selection:bg-[#58A0B4] selection:text-black">
-      {/* <Navbar /> */}
       <nav className="w-full sticky top-0 z-50 backdrop-blur-md font-syne border-b border-white/5 bg-black/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-50">
-          {/* Grid Layout: 2 columns on mobile, 3 on desktop */}
           <div className="grid grid-cols-2 md:grid-cols-3 h-20 items-center text-sm">
-            {/* Left: Brand */}
             <div className="flex items-center gap-4 justify-start">
               <Link
                 href="/"
@@ -47,45 +68,62 @@ const page = () => {
         </div>
       </nav>
 
-      <main className="flex flex-1 flex-col items-center justify-center w-full">
-        <div className="flex w-full max-w-[28rem] flex-col items-center gap-12 rounded-3xl px-8 py-8 shadow-2xl relative overflow-hidden">
+      <main className="flex flex-1 flex-col items-center justify-center w-full px-4">
+        <div className="flex w-full max-w-[30rem] flex-col items-center gap-10 rounded-3xl border border-white/10 bg-gradient-to-b from-white/[0.08] to-transparent px-8 py-12 shadow-2xl backdrop-blur-xl relative overflow-hidden">
           {/* Header */}
           <div className="flex flex-col items-center gap-4 text-center z-10 w-full">
-            <h1 className="text-3xl md:text-5xl font-syne font-bold tracking-tight mb-8">
+            <div className="inline-flex items-center px-3 py-1 rounded-full bg-[#58A0B4]/10 text-[#58A0B4] text-xs font-dm-sans mb-2 border border-[#58A0B4]/20">
+              Developer Portal
+            </div>
+            <h1 className="text-3xl md:text-5xl font-syne font-bold tracking-tight">
               Sign In to Vouch
             </h1>
-            <p className="text-lg font-dm-sans text-gray-400">
+            <p className="text-base font-dm-sans text-gray-400 max-w-sm mt-2">
               The platform for building absolute trust down to the programmatic
               level.
             </p>
           </div>
 
+          {errorMsg && (
+            <div className="w-full px-4 py-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-xl font-dm-sans text-center">
+              {errorMsg}
+            </div>
+          )}
+
           {/* OAuth Buttons */}
           <div className="flex w-full flex-col gap-4 z-10">
             <Button
-              className="bg-white text-black hover:bg-gray-200 px-8 py-6 text-lg font-syne transition-all shadow-lg hover:scale-102"
-              onClick={() => {
-                location.href = "/dashboard";
-              }}
+              disabled={isLoading}
+              className="bg-white text-black hover:bg-gray-200 px-8 py-7 text-lg font-syne font-semibold transition-all shadow-[0_0_30px_rgba(255,255,255,0.15)] hover:shadow-[0_0_35px_rgba(255,255,255,0.3)] flex items-center justify-center rounded-xl cursor-pointer"
+              onClick={handleGithubLogin}
             >
-              <GithubIcon />
-              Continue with GitHub
+              {isLoading ? (
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                  <span>Connecting to GitHub...</span>
+                </div>
+              ) : (
+                <>
+                  <GithubIcon />
+                  Continue with GitHub
+                </>
+              )}
             </Button>
           </div>
         </div>
 
         {/* Global Footer Links */}
-        <div className="mt-8 flex gap-6 text-xs text-gray-600 font-dm-sans">
-          <a href="#" className="hover:text-gray-400 transition-colors">
+        <div className="mt-12 flex gap-8 text-xs text-gray-500 font-dm-sans tracking-wide">
+          <Link href="#" className="hover:text-gray-300 transition-colors">
             Privacy Policy
-          </a>
-          <a href="#" className="hover:text-gray-400 transition-colors">
+          </Link>
+          <Link href="#" className="hover:text-gray-300 transition-colors">
             Terms of Service
-          </a>
+          </Link>
         </div>
       </main>
     </div>
   );
 };
 
-export default page;
+export default SignInPage;

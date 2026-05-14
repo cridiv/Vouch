@@ -32,48 +32,82 @@ export class DeveloperService {
   }
 
   /**
-   * Provisions a developer. If the developer already exists (by supabaseUid),
-   * returns the existing record along with their current API keys.
-   * If new, creates a new Developer record, generates their first API key,
-   * and returns both (with the raw key).
+   * Utility to capture and save developer profile data from GitHub/Supabase Auth into the DB.
    */
-  async provision(email: string, supabaseUid: string) {
-    // 1. Check if developer already exists by supabaseUid
+  async captureDeveloperProfile(
+    supabaseUid: string,
+    profileData: { email: string; name?: string; avatarUrl?: string; metadata?: any },
+  ) {
     const existingDeveloper = await this.prisma.developer.findUnique({
       where: { supabaseUid },
-      include: { apiKeys: true },
     });
 
     if (existingDeveloper) {
-      const apiKey = await this.generateApiKey(existingDeveloper.id, 'Harness Key');
-      return {
-        developer: existingDeveloper,
-        apiKey,
-      };
+      return this.prisma.developer.update({
+        where: { supabaseUid },
+        data: {
+          email: profileData.email,
+          name: profileData.name || existingDeveloper.name,
+          avatarUrl: profileData.avatarUrl || existingDeveloper.avatarUrl,
+          metadata: profileData.metadata ? profileData.metadata : existingDeveloper.metadata,
+        },
+      });
     }
 
-    // 2. Prevent unique constraint violation on email if same email is used with different supabaseUid
     const existingEmail = await this.prisma.developer.findUnique({
-      where: { email },
+      where: { email: profileData.email },
     });
     if (existingEmail) {
       throw new ConflictException('A developer with this email address already exists.');
     }
 
-    // 3. Create the Developer record
-    const newDeveloper = await this.prisma.developer.create({
+    return this.prisma.developer.create({
       data: {
-        email,
         supabaseUid,
+        email: profileData.email,
+        name: profileData.name,
+        avatarUrl: profileData.avatarUrl,
+        metadata: profileData.metadata || {},
       },
     });
+  }
 
-    // 4. Generate first API key
-    const apiKey = await this.generateApiKey(newDeveloper.id);
+  /**
+   * Provisions a developer. Updates or creates their profile data and API keys.
+   */
+  async provision(
+    email: string,
+    supabaseUid: string,
+    name?: string,
+    avatarUrl?: string,
+    metadata?: any,
+  ) {
+    const existingBefore = await this.prisma.developer.findUnique({
+      where: { supabaseUid },
+      include: { apiKeys: true },
+    });
 
-    // 5. Retrieve developer with their API keys list
+    // 1. Capture and save developer profile data
+    const developerRecord = await this.captureDeveloperProfile(supabaseUid, {
+      email,
+      name,
+      avatarUrl,
+      metadata,
+    });
+
+    // 2. Return existing keys if present
+    if (existingBefore && existingBefore.apiKeys.length > 0) {
+      const apiKey = await this.generateApiKey(developerRecord.id, 'Harness Key');
+      return {
+        developer: developerRecord,
+        apiKey,
+      };
+    }
+
+    // 3. Otherwise generate first API key
+    const apiKey = await this.generateApiKey(developerRecord.id);
     const developer = await this.prisma.developer.findUnique({
-      where: { id: newDeveloper.id },
+      where: { id: developerRecord.id },
       include: { apiKeys: true },
     });
 
