@@ -5,10 +5,12 @@ Handles efficient model initialization and caching to reduce latency
 
 import logging
 import time
+import os
 from typing import Optional, Dict
 from deepface import DeepFace
 import cv2
 import mediapipe as mp
+import numpy as np
 
 logger = logging.getLogger(__name__)
 

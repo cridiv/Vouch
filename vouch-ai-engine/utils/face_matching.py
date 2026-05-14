@@ -76,12 +76,36 @@ def extract_face_from_image(image: np.ndarray) -> Tuple[Optional[np.ndarray], bo
 
 
 def match_faces(face1, face2, threshold=0.6):
+    """
+    Compare two face images and return match score
+    
+    Args:
+        face1: First face image (numpy array or file path)
+        face2: Second face image (numpy array or file path)
+        threshold: Match score threshold (0.6 default)
+    
+    Returns:
+        dict with match_score (0-100), verified (bool), distance, model, processing_time_ms
+    """
+    start_time = time.time()
+    
     try:
+        # Validate inputs
         if face1 is None or face2 is None:
-            return {"match_score": 0, "verified": False}
+            logger.warning("Face comparison skipped: one or both faces are None")
+            return {"match_score": 0, "verified": False, "distance": 1.0, "model": "Facenet", "processing_time_ms": 0}
         
+        # CRITICAL: Load DeepFace on first use
+        _load_deepface()
+        
+        if DeepFace is None:
+            logger.error("DeepFace failed to load - cannot perform face verification")
+            return {"match_score": 0, "verified": False, "distance": 1.0, "model": "Facenet", "processing_time_ms": int((time.time() - start_time) * 1000)}
+        
+        logger.info(f"Comparing faces: type1={type(face1).__name__}, type2={type(face2).__name__}")
+        
+        # Perform face verification using DeepFace
         result = DeepFace.verify(
-<<<<<<< Updated upstream
             img1_path=face1,
             img2_path=face2,
             model_name="Facenet",
@@ -90,6 +114,8 @@ def match_faces(face1, face2, threshold=0.6):
         
         distance = result['distance']
         verified = result['verified']
+        
+        logger.info(f"DeepFace raw result: distance={distance:.4f}, verified={verified}")
         
         # Biometric evaluation curve calibrated for webcam selfies vs ID cards
         if distance <= 0.75 or verified:
@@ -100,31 +126,26 @@ def match_faces(face1, face2, threshold=0.6):
             match_score = int((1.0 - distance) * 100)
         
         match_score = max(0, min(99, match_score))
-        
         elapsed = time.time() - start_time
-        logger.info(f"Face match result: score={match_score}, verified={verified}, time={elapsed:.2f}s")
+        
+        logger.info(f"Face match result: score={match_score}, verified={verified}, distance={distance:.4f}, time={elapsed:.2f}s")
         
         return {
             "match_score": match_score,
             "verified": verified,
             "distance": float(distance),
             "model": "Facenet",
-            "processing_time_ms": elapsed * 1000
+            "processing_time_ms": int(elapsed * 1000)
         }
     
-=======
-            img1_path=face1, 
-            img2_path=face2, 
-            model_name="ArcFace",  # Strong performer
-            detector_backend="skip",
-            enforce_detection=False
-        )
-        distance = result.get('distance', 1.0)
-        match_score = max(0, int(100 * (1 - distance)))  # Proper conversion
-        return {"match_score": match_score, "verified": match_score >= 85}
->>>>>>> Stashed changes
     except Exception as e:
-        logger.error(f"Face matching error: {e}")
-        return {"match_score": 40, "verified": False}  # Safe low fallback for mismatches
-    """
-    
+        elapsed = time.time() - start_time
+        logger.error(f"Face matching error: {type(e).__name__}: {e}", exc_info=True)
+        return {
+            "match_score": 0,
+            "verified": False,
+            "distance": 1.0,
+            "model": "Facenet",
+            "processing_time_ms": int(elapsed * 1000),
+            "error": str(e)
+        }
