@@ -75,40 +75,13 @@ def extract_face_from_image(image: np.ndarray) -> Tuple[Optional[np.ndarray], bo
         return None, False, 0.0
 
 
-def match_faces(face1: np.ndarray, face2: np.ndarray, threshold: float = 0.6) -> dict:
-    """
-    Compare two face images and return match score
-    
-    Args:
-        face1: numpy array of first face (from document)
-        face2: numpy array of second face (from selfie)
-        threshold: match distance threshold (DeepFace uses cosine distance, 0-1)
-    
-    Returns:
-        dict: {
-            "match_score": 0-100 integer,
-            "verified": boolean,
-            "distance": float,
-            "model": str
-        }
-    """
+def match_faces(face1, face2, threshold=0.6):
     try:
-        _load_deepface()
+        if face1 is None or face2 is None:
+            return {"match_score": 0, "verified": False}
         
-        if DeepFace is None:
-            logger.error("DeepFace not loaded")
-            return {
-                "match_score": 0,
-                "verified": False,
-                "distance": 1.0,
-                "model": "unknown",
-                "error": "DeepFace not available"
-            }
-        
-        start_time = time.time()
-        
-        # Use DeepFace to verify faces
         result = DeepFace.verify(
+<<<<<<< Updated upstream
             img1_path=face1,
             img2_path=face2,
             model_name="Facenet",
@@ -139,12 +112,19 @@ def match_faces(face1: np.ndarray, face2: np.ndarray, threshold: float = 0.6) ->
             "processing_time_ms": elapsed * 1000
         }
     
+=======
+            img1_path=face1, 
+            img2_path=face2, 
+            model_name="ArcFace",  # Strong performer
+            detector_backend="skip",
+            enforce_detection=False
+        )
+        distance = result.get('distance', 1.0)
+        match_score = max(0, int(100 * (1 - distance)))  # Proper conversion
+        return {"match_score": match_score, "verified": match_score >= 85}
+>>>>>>> Stashed changes
     except Exception as e:
-        logger.error(f"Error matching faces: {e}")
-        return {
-            "match_score": 0,
-            "verified": False,
-            "distance": 1.0,
-            "model": "VGGFace2",
-            "error": str(e)
-        }
+        logger.error(f"Face matching error: {e}")
+        return {"match_score": 40, "verified": False}  # Safe low fallback for mismatches
+    """
+    
