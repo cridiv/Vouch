@@ -55,10 +55,11 @@ const Hero = () => {
           initial={{ opacity: 0, filter: "blur(12px)", y: 15 }}
           animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
           transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
-          className="text-lg md:text-xl text-gray-300 font-dm-sans max-w-2xl mx-auto leading-relaxed mt-4"
+          className="text-lg md:text-lg text-gray-300 font-dm-sans max-w-2xl mx-auto leading-relaxed mt-4"
         >
           <span className="underline"> A hyper-performant AI</span> verification
-          engine that detects fraud and verifies proof of liveness
+          engine that detects fraud and verifies proof of liveness. <br />{" "}
+          Identity verified. Risk scored. Money moved — only when AI clears it
         </motion.p>
 
         {/* Call to Action */}

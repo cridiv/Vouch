@@ -19,7 +19,7 @@ const Features = () => {
           >
             <div className="bg-[#0b0b0f] border border-gray-800 rounded-2xl flex flex-col gap-6 p-8 group h-full overflow-hidden transition-all hover:bg-[#121217]">
               <img
-                alt="Onchain event triggers"
+                alt=" Identity Verification "
                 loading="lazy"
                 width="420"
                 height="420"
@@ -49,7 +49,7 @@ const Features = () => {
           >
             <div className="bg-[#0b0b0f] border border-gray-800 rounded-2xl flex flex-col gap-6 p-8 group h-full overflow-hidden transition-all hover:bg-[#121217]">
               <img
-                alt="Real-time consumer targeting"
+                alt="Fraud Detection"
                 loading="lazy"
                 width="420"
                 height="420"
@@ -79,7 +79,7 @@ const Features = () => {
           >
             <div className="bg-[#0b0b0f] border border-gray-800 rounded-2xl flex flex-col gap-6 p-8 group h-full overflow-hidden transition-all hover:bg-[#121217]">
               <img
-                alt="Agents query APIs onchain"
+                alt=" Escrow & Squad Rails"
                 loading="lazy"
                 width="420"
                 height="420"
