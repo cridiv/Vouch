@@ -121,8 +121,13 @@ async def verify_identity(
             )
         
         # 2. EXTRACT FACE FROM DOCUMENT
-        doc_face, doc_face_found, doc_confidence = extract_face_from_image(document_array)
-        
+        doc_face = doc_fields.get("face_region")
+        doc_face_found = doc_face is not None
+
+        # Fallback if Reducto did not extract a face crop
+        if not doc_face_found:
+            doc_face, doc_face_found, doc_confidence = extract_face_from_image(document_array)
+
         if not doc_face_found:
             logger.warning(f"[{platform_user_id}] No face found in document")
             elapsed = (time.time() - start_time) * 1000

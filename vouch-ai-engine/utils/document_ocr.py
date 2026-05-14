@@ -54,6 +54,11 @@ DOCUMENT_TYPE_KEYWORDS = {
     "state_id": ["STATE", "ID", "IDENTIFICATION"],
 }
 
+def extract_face_region_with_spatial_awareness(image: np.ndarray) -> str:
+    face_region = _extract_face_region_with_spatial_awareness(result, image)
+    if face_region is not None:
+        fields["face_region_detected"] = True
+        fields["face_region"] = face_region
 
 def detect_document_type(image: np.ndarray) -> str:
     """
@@ -161,11 +166,12 @@ def extract_document_fields(image: np.ndarray, doc_type: str) -> Dict[str, Optio
         Dict with fields: name, expiry_date, issue_date, document_number
     """
     fields = {
-        "name": None,
-        "expiry_date": None,
-        "issue_date": None,
-        "document_number": None,
-        "face_region_detected": False,
+    "name": None,
+    "expiry_date": None,
+    "issue_date": None,
+    "document_number": None,
+    "face_region_detected": False,
+    "face_region": None,
     }
     
     try:
