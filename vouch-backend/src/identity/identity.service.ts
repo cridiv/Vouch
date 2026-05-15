@@ -72,7 +72,7 @@ export class IdentityService {
     try {
       this.logger.log(`Calling ML Engine at ${mlUrl}/identity/verify for user ${platformUser.id} with ${selfieBuffers.length} frames`);
       const response = await lastValueFrom(
-        this.httpService.post(`${mlUrl}/identity/verify`, formData, { timeout: 45000 })
+        this.httpService.post(`${mlUrl}/identity/verify`, formData, { timeout: 90000 })
       );
       result = response.data;
     } catch (error: any) {

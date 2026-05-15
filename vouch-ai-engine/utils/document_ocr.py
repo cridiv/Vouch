@@ -161,11 +161,12 @@ def extract_document_fields(image: np.ndarray, doc_type: str) -> Dict[str, Optio
         Dict with fields: name, expiry_date, issue_date, document_number
     """
     fields = {
-    "name": None,
-    "expiry_date": None,
-    "issue_date": None,
-    "document_number": None,
-    "face_region_detected": False,
+        "name": None,
+        "expiry_date": None,
+        "issue_date": None,
+        "document_number": None,
+        "face_region_detected": False,
+        "face_region": None,
     }
     
     try:
@@ -187,6 +188,7 @@ def extract_document_fields(image: np.ndarray, doc_type: str) -> Dict[str, Optio
                 face_region = _extract_face_region_with_spatial_awareness(result, image)
                 if face_region is not None:
                     fields["face_region_detected"] = True
+                    fields["face_region"] = face_region
                 
                 logger.info(f"Extracted fields via Reducto: {fields}")
                 return fields
@@ -260,7 +262,6 @@ def _extract_fields_from_reducto(result: Dict[str, Any], doc_type: str) -> Dict[
             for element in result["elements"]:
                 if element.get("type") in ["image", "photo", "picture"]:
                     fields["face_region_detected"] = True
-                    logger.info(f"Face region detected via Reducto spatial analysis")
                     break
         
         return fields
