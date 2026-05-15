@@ -16,7 +16,7 @@ export function Identity() {
     sellerId: null as string | null,
     agreementId: null as string | null,
     backendUrl: 'https://vouch-fmql.onrender.com',
-    verifyUrl: 'http://localhost:3000', // The Next.js demo app
+    verifyUrl: 'https://vouchsdk.xyz', // The Next.js demo app
   });
 
   useEffect(() => {

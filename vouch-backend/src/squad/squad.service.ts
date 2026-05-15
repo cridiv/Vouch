@@ -143,7 +143,7 @@ export class SquadService {
       currency: 'NGN',
       initiate_type: 'inline',
       transaction_ref: transactionRef,
-      callback_url: this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3000/dashboard',
+      callback_url: this.configService.get<string>('FRONTEND_URL') || 'https://vouchsdk.xyz/dashboard',
     };
 
     try {
