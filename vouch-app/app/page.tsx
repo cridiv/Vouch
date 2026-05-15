@@ -7,10 +7,12 @@ import HowItWorks from "./components/HowItWorks";
 import CtaCard from "./components/CtaCard";
 import Faqs from "./components/Faqs";
 import Footer from "./components/Footer";
+import AuthRedirect from "./components/AuthRedirect";
 
 export default function Home() {
   return (
     <div>
+      <AuthRedirect />
       <Navbar />
       <Hero />
       <About />
