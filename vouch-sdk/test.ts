@@ -5,8 +5,8 @@ async function runSdkTest() {
   console.log('🌟 STARTING VOUCH SDK VERIFICATION SCRIPT 🌟');
   
   // Step 1: Provision a fresh developer API key on the local backend
-  console.log('🚀 Provisioning fresh developer API key from http://localhost:5000/v1/developer/provision...');
-  const provRes = await axios.post('http://localhost:5000/v1/developer/provision', {
+  console.log('🚀 Provisioning fresh developer API key from https://vouch-fmql.onrender.com/v1/developer/provision...');
+  const provRes = await axios.post('https://vouch-fmql.onrender.com/v1/developer/provision', {
     email: `sdk-client-${Date.now()}@vouch.com`,
     supabaseUid: `sub-sdk-${Date.now()}`
   });

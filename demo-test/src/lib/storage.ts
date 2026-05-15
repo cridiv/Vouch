@@ -25,7 +25,7 @@ export const storage = {
   getAgreementId: () => (typeof window !== 'undefined' ? localStorage.getItem(KEYS.AGREEMENT_ID) : null),
   setAgreementId: (id: string) => (typeof window !== 'undefined' ? localStorage.setItem(KEYS.AGREEMENT_ID, id) : null),
   
-  getBackendUrl: () => (typeof window !== 'undefined' ? localStorage.getItem(KEYS.BACKEND_URL) || 'http://localhost:5000' : 'http://localhost:5000'),
+  getBackendUrl: () => (typeof window !== 'undefined' ? localStorage.getItem(KEYS.BACKEND_URL) || 'https://vouch-fmql.onrender.com' : 'https://vouch-fmql.onrender.com'),
   setBackendUrl: (url: string) => (typeof window !== 'undefined' ? localStorage.setItem(KEYS.BACKEND_URL, url) : null),
   
   clearAll: () => {

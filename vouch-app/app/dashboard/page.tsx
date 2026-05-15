@@ -60,7 +60,7 @@ const DashboardPage = () => {
 
           // 2. Provision developer account in Vouch Backend
           const res = await fetch(
-            "http://localhost:5000/v1/developer/provision",
+            "https://vouch-fmql.onrender.com/v1/developer/provision",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },

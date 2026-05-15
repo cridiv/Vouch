@@ -3,7 +3,7 @@ import { OutputPanel } from '../components/OutputPanel';
 import { storage } from '../lib/storage';
 
 export function Setup() {
-  const [backendUrl, setBackendUrl] = useState('http://localhost:5000');
+  const [backendUrl, setBackendUrl] = useState('https://vouch-fmql.onrender.com');
   const [email, setEmail] = useState('test@vouch.dev');
   const [supabaseUid, setSupabaseUid] = useState('test-uid-001');
   const [output, setOutput] = useState('Waiting...');
@@ -14,7 +14,7 @@ export function Setup() {
     buyerId: null as string | null,
     sellerId: null as string | null,
     agreementId: null as string | null,
-    backendUrl: 'http://localhost:5000',
+    backendUrl: 'https://vouch-fmql.onrender.com',
   });
 
   useEffect(() => {

@@ -96,7 +96,7 @@ export class Vouch {
 
   constructor(apiKey: string, options: VouchOptions = {}) {
     this.apiKey = apiKey;
-    const baseURL = options.apiUrl || (typeof process !== 'undefined' && process.env?.VOUCH_API_URL) || 'http://localhost:5000/v1';
+    const baseURL = options.apiUrl || (typeof process !== 'undefined' && process.env?.VOUCH_API_URL) || 'https://vouch-fmql.onrender.com/v1';
     this.verifyUrl = options.verifyUrl || 'http://localhost:3000';
 
     this.http = axios.create({
