@@ -41,84 +41,96 @@ const DashboardPage = () => {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
+    const init = async () => {
+      // Step 1: Check if there is a hash with access_token in the URL
+      const hash = typeof window !== 'undefined' ? window.location.hash : '';
+      if (hash && hash.includes('access_token')) {
+        // Parse tokens directly from hash
+        const params = new URLSearchParams(hash.substring(1));
+        const accessToken = params.get('access_token');
+        const refreshToken = params.get('refresh_token');
 
-    const handleSession = async (session: any) => {
-      const user = session?.user;
+        if (accessToken && refreshToken) {
+          // Explicitly set the session — do not wait for Supabase auto-detection
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
 
-      if (user) {
-        setUserData(user);
-        setIsProvisioning(true);
-        setAuthError(null);
-
-        try {
-          // 2. Provision developer account in Vouch Backend
-          const res = await fetch(
-            "https://vouch-fmql.onrender.com/v1/developer/provision",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: user.email || "developer@github.com",
-                supabaseUid: user.id,
-                name:
-                  user.user_metadata?.full_name ||
-                  user.user_metadata?.name ||
-                  user.email?.split("@")[0] ||
-                  "GitHub Developer",
-                avatarUrl: user.user_metadata?.avatar_url || "",
-                metadata: user.user_metadata || {},
-              }),
-            },
-          );
-
-          const data = await res.json();
-          if (!res.ok) {
-            throw new Error(
-              data.message ||
-                "Failed to provision developer account in Vouch backend.",
-            );
+          if (error || !data.session) {
+            setAuthError('Failed to establish session. Please sign in again.');
+            setIsProvisioning(false);
+            return;
           }
 
-          setProvisionData(data);
-          localStorage.setItem("vouch_api_key", data.apiKey?.rawKey || "");
-          localStorage.setItem("vouch_dev_id", data.developerId || "");
-        } catch (err: any) {
-          console.error("Dashboard Auth Error:", err);
-          setAuthError(
-            err.message ||
-              "Authentication verification failed. Please log in again.",
+          // Clean the URL — remove the hash so it does not persist on refresh
+          window.history.replaceState(null, '', window.location.pathname);
+
+          // Proceed to provision
+          await provision(data.session.user);
+          return;
+        }
+      }
+
+      // Step 2: No hash — check for existing session normally
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await provision(session.user);
+        return;
+      }
+
+      // Step 3: No session at all — redirect to login
+      window.location.href = "/signin";
+    };
+
+    const provision = async (user: any) => {
+      setUserData(user);
+      setIsProvisioning(true);
+      setAuthError(null);
+
+      try {
+        const res = await fetch(
+          "https://vouch-fmql.onrender.com/v1/developer/provision",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: user.email || "developer@github.com",
+              supabaseUid: user.id,
+              name:
+                user.user_metadata?.full_name ||
+                user.user_metadata?.name ||
+                user.email?.split("@")[0] ||
+                "GitHub Developer",
+              avatarUrl: user.user_metadata?.avatar_url || "",
+              metadata: user.user_metadata || {},
+            }),
+          },
+        );
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(
+            data.message ||
+              "Failed to provision developer account in Vouch backend.",
           );
-        } finally {
-          setIsProvisioning(false);
         }
-      } else {
-        // Fallback check if we are not in the middle of processing a hash callback
-        const hasHash = typeof window !== 'undefined' && window.location.hash.includes('access_token');
-        if (!hasHash) {
-          window.location.href = "/signin";
-        }
+
+        setProvisionData(data);
+        localStorage.setItem("vouch_api_key", data.apiKey?.rawKey || "");
+        localStorage.setItem("vouch_dev_id", data.developerId || "");
+      } catch (err: any) {
+        console.error("Dashboard Auth Error:", err);
+        setAuthError(
+          err.message ||
+            "Authentication verification failed. Please log in again.",
+        );
+      } finally {
+        setIsProvisioning(false);
       }
     };
 
-    // 1. Check current session immediately
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (mounted) {
-        handleSession(session);
-      }
-    });
-
-    // 2. Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (mounted) {
-        handleSession(session);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    init();
   }, []);
 
   const handleLogout = async () => {
