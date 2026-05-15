@@ -68,7 +68,7 @@ export class EscrowService {
     });
 
     // Thing 4 — Create the Squad Virtual Account
-    const buyerEmail = dto.buyerEmail ?? `${dto.buyerExternalId}@vouch.sandbox`;
+    const buyerEmail = dto.buyerEmail ?? `${dto.buyerExternalId}@vouch.dev`;
     const buyerName = dto.buyerName ?? 'Vouch User';
 
     let virtualAccount;
@@ -361,7 +361,7 @@ export class EscrowService {
       const paymentLink = await this.squadService.createPaymentLink(
         milestoneId,
         milestone.amount,
-        `${agreement.buyerExternalId}@vouch.sandbox`,
+        `${agreement.buyerExternalId}@vouch.dev`,
       );
       paymentLinkId = paymentLink.link_id;
 
@@ -493,6 +493,55 @@ export class EscrowService {
     return agreement;
   }
 
+  /**
+   * DEV/TEST ONLY: Simulate a Squad webhook payment confirmation.
+   * Directly transitions the agreement from PENDING to FUNDED without calling Squad.
+   */
+  async simulatePayment(agreementId: string, transactionRef: string, developer: Developer) {
+    const agreement = await this.prisma.agreement.findUnique({
+      where: { id: agreementId },
+    });
+
+    if (!agreement) {
+      throw new NotFoundException(`Agreement with ID ${agreementId} not found`);
+    }
+
+    if (agreement.developerId !== developer.id) {
+      throw new ForbiddenException(`You do not have permission to access this agreement`);
+    }
+
+    if (agreement.status !== 'PENDING') {
+      throw new BadRequestException(`Agreement is already ${agreement.status}. Cannot simulate payment.`);
+    }
+
+    // Directly transition to FUNDED
+    this.stateMachine.transition(agreement.status as EscrowStatus, EscrowStatus.FUNDED);
+
+    await this.prisma.agreement.update({
+      where: { id: agreementId },
+      data: { status: 'FUNDED' },
+    });
+
+    this.logger.log(`[SIMULATE] Agreement ${agreementId} moved to FUNDED (ref: ${transactionRef})`);
+
+    void this.developerLogService.log({
+      developerId: developer.id,
+      eventType: 'ESCROW_FUNDED',
+      agreementId,
+      payload: {
+        transactionRef,
+        simulated: true,
+      },
+    });
+
+    return {
+      status: 'FUNDED',
+      agreementId,
+      transactionRef,
+      message: 'Payment simulated successfully. Agreement is now FUNDED.',
+    };
+  }
+
   async assessPaymentRisk(
     agreementId: string,
     dto: AssessPaymentRiskDto,
@@ -525,6 +574,8 @@ export class EscrowService {
       deviceFingerprint: dto.deviceFingerprint || 'fallback-device-fingerprint',
       transactionAmount: agreement.totalAmount,
       agreementId: agreement.id,
+      simulateVpn: dto.simulate_vpn,
+      simulateImpossibleTravel: dto.simulate_impossible_travel,
     });
 
     if (fraudResult.flag === 'RED') {
@@ -538,7 +589,18 @@ export class EscrowService {
         status: 'FROZEN',
         score: fraudResult.score,
         flag: fraudResult.flag,
+        triggeredSignals: fraudResult.triggered_signals || [],
         message: 'Payment risk assessment flagged RED. Escrow is frozen and payments are blocked.',
+      };
+    }
+
+    if (fraudResult.flag === 'AMBER') {
+      return {
+        status: agreement.status,
+        score: fraudResult.score,
+        flag: fraudResult.flag,
+        triggeredSignals: fraudResult.triggered_signals || [],
+        message: 'Elevated risk detected. Additional verification is required before payment can proceed.',
       };
     }
 
@@ -546,8 +608,11 @@ export class EscrowService {
       status: agreement.status,
       score: fraudResult.score,
       flag: fraudResult.flag,
+      triggeredSignals: fraudResult.triggered_signals || [],
       squadVirtualAccountId: agreement.squadVirtualAccountId,
       squadVirtualAccountNo: agreement.squadVirtualAccountNo,
+      squadBank: 'GTBank',
+      amount: agreement.totalAmount,
       message: 'Payment risk assessment cleared. You may proceed with funding.',
     };
   }

@@ -31,186 +31,98 @@ class IdentityVerifyResponse(BaseModel):
 async def verify_identity(
     platform_user_id: str = Form(...),
     document_image: UploadFile = File(...),
-    selfie_image: UploadFile = File(...),
-    selfie_frames: Optional[List[UploadFile]] = File(None)
+    selfie_images: List[UploadFile] = File(...)
 ) -> IdentityVerifyResponse:
     """
-    Verify user identity through document and selfie analysis
-    
-    Per API_CONTRACT.md:
-    - Match score: 0-100 integer
-    - Rejection reasons: face_not_found, liveness_failed, match_below_threshold, document_unreadable
-    - Processing time < 500ms target
-    
-    Args:
-        platform_user_id: Unique user identifier for audit logging
-        document_image: Government-issued ID document (JPEG/PNG)
-        selfie_image: Selfie for face matching (JPEG/PNG)
-        selfie_frames: Optional frames for liveness detection (JPEG/PNG)
-    
-    Returns:
-        IdentityVerifyResponse with verification results
+    Verify user identity through document and multiple selfie analysis (Gesture-based)
     """
     start_time = time.time()
-    logger.info(f"[{platform_user_id}] Starting identity verification...")
+    logger.info(f"[{platform_user_id}] Starting multi-frame identity verification with {len(selfie_images)} frames")
     
     try:
-        # 1. LOAD AND VALIDATE IMAGES
+        # 1. LOAD AND VALIDATE DOCUMENT
         doc_bytes = await document_image.read()
-        selfie_bytes = await selfie_image.read()
-        
         document_array = decode_file_to_image(doc_bytes)
-        selfie_array = decode_file_to_image(selfie_bytes)
         
         if document_array is None:
-            logger.error(f"[{platform_user_id}] Failed to decode document image")
             elapsed = (time.time() - start_time) * 1000
             return IdentityVerifyResponse(
-                verified=False,
-                match_score=0,
-                liveness_passed=False,
-                document_type="unknown",
-                face_extracted=False,
-                rejection_reason="document_unreadable",
-                processing_time_ms=elapsed
+                verified=False, match_score=0, liveness_passed=False,
+                document_type="unknown", face_extracted=False,
+                rejection_reason="document_unreadable", processing_time_ms=elapsed
             )
         
-        if selfie_array is None:
-            logger.error(f"[{platform_user_id}] Failed to decode selfie image")
+        # 2. LOAD ALL SELFIE FRAMES
+        selfie_arrays = []
+        for file in selfie_images:
+            content = await file.read()
+            arr = decode_file_to_image(content)
+            if arr is not None:
+                selfie_arrays.append(arr)
+        
+        if not selfie_arrays:
             elapsed = (time.time() - start_time) * 1000
             return IdentityVerifyResponse(
-                verified=False,
-                match_score=0,
-                liveness_passed=False,
-                document_type="unknown",
-                face_extracted=False,
-                rejection_reason="document_unreadable",
-                processing_time_ms=elapsed
+                verified=False, match_score=0, liveness_passed=False,
+                document_type="unknown", face_extracted=False,
+                rejection_reason="face_not_found", processing_time_ms=elapsed
             )
-        
-        # Validate image quality
-        doc_quality = validate_image_quality(document_array)
-        selfie_quality = validate_image_quality(selfie_array)
-        
-        logger.info(f"[{platform_user_id}] Document quality: {doc_quality}")
-        logger.info(f"[{platform_user_id}] Selfie quality: {selfie_quality}")
-        
-        # 1.5 DETECT DOCUMENT TYPE AND EXTRACT FIELDS
+
+        # 3. DETECT DOCUMENT TYPE
         document_type = detect_document_type(document_array)
-        logger.info(f"[{platform_user_id}] Detected document type: {document_type}")
-        
-        # Extract document fields (name, expiry_date, etc.)
-        doc_fields = extract_document_fields(document_array, document_type)
-        logger.info(f"[{platform_user_id}] Extracted fields: {doc_fields}")
-        
-        # Validate document expiry
-        expiry_valid, expiry_status = validate_document_expiry(doc_fields.get("expiry_date"))
-        logger.info(f"[{platform_user_id}] Document expiry validation: {expiry_status}")
-        
-        if not expiry_valid:
-            logger.warning(f"[{platform_user_id}] Document is expired")
-            elapsed = (time.time() - start_time) * 1000
-            return IdentityVerifyResponse(
-                verified=False,
-                match_score=0,
-                liveness_passed=False,
-                document_type=document_type,
-                face_extracted=False,
-                rejection_reason="document_expired",
-                processing_time_ms=elapsed
-            )
-        
-        # 2. EXTRACT FACE FROM DOCUMENT
-        doc_face, doc_face_found, doc_confidence = extract_face_from_image(document_array)
+        doc_face, doc_face_found, _ = extract_face_from_image(document_array)
         
         if not doc_face_found:
-            logger.warning(f"[{platform_user_id}] No face found in document")
             elapsed = (time.time() - start_time) * 1000
             return IdentityVerifyResponse(
-                verified=False,
-                match_score=0,
-                liveness_passed=False,
-                document_type="unknown",
-                face_extracted=False,
-                rejection_reason="face_not_found",
-                processing_time_ms=elapsed
+                verified=False, match_score=0, liveness_passed=False,
+                document_type=document_type, face_extracted=False,
+                rejection_reason="face_not_found", processing_time_ms=elapsed
             )
+
+        # 4. PROCESS GESTURES & MATCHING
+        # We find the BEST match among all provided frames (Straight, Left, Right)
+        best_match_score = 0
+        any_face_found = False
         
-        # 3. EXTRACT FACE FROM SELFIE
-        selfie_face, selfie_face_found, selfie_confidence = extract_face_from_image(selfie_array)
+        for i, selfie_arr in enumerate(selfie_arrays):
+            selfie_face, face_found, _ = extract_face_from_image(selfie_arr)
+            if face_found:
+                any_face_found = True
+                match_result = match_faces(doc_face, selfie_face, threshold=0.75)
+                score = match_result.get("match_score", 0)
+                if score > best_match_score:
+                    best_match_score = score
         
-        if not selfie_face_found:
-            logger.warning(f"[{platform_user_id}] No face found in selfie")
+        if not any_face_found:
             elapsed = (time.time() - start_time) * 1000
             return IdentityVerifyResponse(
-                verified=False,
-                match_score=0,
-                liveness_passed=False,
-                document_type="unknown",
-                face_extracted=False,
-                rejection_reason="face_not_found",
-                processing_time_ms=elapsed
+                verified=False, match_score=0, liveness_passed=False,
+                document_type=document_type, face_extracted=False,
+                rejection_reason="face_not_found", processing_time_ms=elapsed
             )
-        
-        # 4. LIVENESS DETECTION (if frames provided)
-        liveness_passed = True
-        if selfie_frames and len(selfie_frames) > 0:
-            logger.info(f"[{platform_user_id}] Processing {len(selfie_frames)} liveness frames...")
-            frames_arrays = []
-            for frame_file in selfie_frames:
-                frame_bytes = await frame_file.read()
-                frame_array = decode_file_to_image(frame_bytes)
-                if frame_array is not None:
-                    frames_arrays.append(frame_array)
-            
-            if frames_arrays:
-                liveness_result = check_liveness(frames_arrays)
-                liveness_passed = liveness_result.get("liveness_passed", False)
-                logger.info(f"[{platform_user_id}] Liveness result: {liveness_result}")
-            else:
-                logger.warning(f"[{platform_user_id}] No valid frames for liveness detection")
-                liveness_passed = True  # Allow to continue if frames invalid
-        
-        if not liveness_passed:
-            logger.warning(f"[{platform_user_id}] Liveness check failed")
-            elapsed = (time.time() - start_time) * 1000
-            return IdentityVerifyResponse(
-                verified=False,
-                match_score=0,
-                liveness_passed=False,
-                document_type="unknown",
-                face_extracted=True,
-                rejection_reason="liveness_failed",
-                processing_time_ms=elapsed
-            )
-        
-        # 5. FACE MATCHING (using cropped face arrays for precise biometric comparison)
-        match_result = match_faces(doc_face, selfie_face, threshold=0.75)
-        match_score = match_result.get("match_score", 0)
-        
-        logger.info(f"[{platform_user_id}] Face match result: score={match_score}, {match_result}")
-        
-        # 6. DETERMINE VERIFICATION STATUS
-        match_threshold = 85  # Per API_CONTRACT.md: threshold 85% = PASS
-        verified = match_result.get("verified", False) and match_score >= match_threshold and liveness_passed
+
+        # 5. LIVENESS DETECTION (Gesture Sequence Validation)
+        # Using the multiple frames as sequence for liveness check
+        liveness_result = check_liveness(selfie_arrays)
+        liveness_passed = liveness_result.get("liveness_passed", False)
+
+        # 6. DETERMINE FINAL STATUS
+        # Threshold: 85% for high confidence matching
+        match_threshold = 85
+        verified = best_match_score >= match_threshold and liveness_passed
         
         rejection_reason = None
         if not verified:
-            if match_score < match_threshold:
+            if best_match_score < match_threshold:
                 rejection_reason = "match_below_threshold"
             elif not liveness_passed:
                 rejection_reason = "liveness_failed"
         
         elapsed = (time.time() - start_time) * 1000
-        
-        logger.info(
-            f"[{platform_user_id}] Identity verification complete: "
-            f"verified={verified}, score={match_score}, time={elapsed:.1f}ms"
-        )
-        
         return IdentityVerifyResponse(
             verified=verified,
-            match_score=match_score,
+            match_score=best_match_score,
             liveness_passed=liveness_passed,
             document_type=document_type,
             face_extracted=True,

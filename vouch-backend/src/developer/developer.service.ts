@@ -171,6 +171,36 @@ export class DeveloperService {
   }
 
   /**
+   * DEV/TEST: Mark a platform user as identity-verified without running the ML pipeline.
+   * Creates the PlatformUser if it doesn't exist yet.
+   */
+  async markUserVerified(externalUserId: string, developerId: string) {
+    const user = await this.resolveOrCreatePlatformUser(externalUserId, developerId);
+
+    const updated = await this.prisma.platformUser.update({
+      where: { id: user.id },
+      data: {
+        identityVerified: true,
+        identityMatchScore: 95,
+        livenessPassed: true,
+        documentType: 'test_bypass',
+      },
+    });
+
+    return {
+      status: 'success',
+      message: `User ${externalUserId} marked as verified (test bypass)`,
+      data: {
+        id: updated.id,
+        externalUserId: updated.externalUserId,
+        identityVerified: updated.identityVerified,
+        identityMatchScore: updated.identityMatchScore,
+        livenessPassed: updated.livenessPassed,
+      },
+    };
+  }
+
+  /**
    * Retrieves a paginated list of DeveloperLog records, optionally filtered by eventType.
    */
   async getLogs(

@@ -1,50 +1,56 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import StepIndicator from '@/app/components/verify/StepIndicator'
 import DocTypeSelector, { DocType } from '@/app/components/verify/DocTypeSelector'
 import DocumentUpload from '@/app/components/verify/DocumentUpload'
 import LivenessCapture from '@/app/components/verify/LivenessCapture'
 import VerificationResult from '@/app/components/verify/VerificationResult'
-import vouch from '@/lib/vouch'
+import { Vouch } from 'vouch-sdk'
 
 type Step = 1 | 2 | 3 | 4
 
-// For testing — these would come from your auth context in the real app
-const TEST_EXTERNAL_USER_ID = `user-${Date.now()}`
+function VerifyContent() {
+  const searchParams = useSearchParams()
+  const userId = searchParams.get('userId')
+  const apiKey = searchParams.get('key')
+  const mode = searchParams.get('mode') // 'modal' or undefined
 
-export default function VerifyPage() {
   const [step, setStep] = useState<Step>(1)
   const [docType, setDocType] = useState<DocType | null>(null)
   const [documentFile, setDocumentFile] = useState<File | null>(null)
-  const [selfieFile, setSelfieFile] = useState<File | null>(null)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<any>(null)
+
+  // Use a dynamic Vouch instance
+  const vouch = new Vouch(apiKey || process.env.NEXT_PUBLIC_VOUCH_API_KEY || '', {
+    apiUrl: 'http://localhost:5000/v1'
+  })
 
   const handleDocumentComplete = (file: File) => {
     setDocumentFile(file)
     setStep(3)
   }
 
-  const handleLivenessComplete = async (selfie: File) => {
-    setSelfieFile(selfie)
+  const handleLivenessComplete = async (frames: File[]) => {
     setStep(4)
-    await runVerification(selfie)
+    await runVerification(frames)
   }
 
-  const runVerification = async (selfie: File) => {
-    if (!documentFile) return
+  const runVerification = async (frames: File[]) => {
+    if (!documentFile || !userId) return
 
     setLoading(true)
     setError(null)
 
     try {
-      const response = await vouch.identity.verify(
+      const response = await vouch.identity.submitVerification(
         documentFile,
-        selfie,
-        TEST_EXTERNAL_USER_ID
+        frames,
+        userId
       )
 
       setResult(response.data)
@@ -56,18 +62,46 @@ export default function VerifyPage() {
     }
   }
 
+  const handleContinue = () => {
+    if (mode === 'modal') {
+      window.parent.postMessage({
+        source: 'vouch-identity',
+        success: result?.identityVerified || false,
+        result: {
+          verified: result?.identityVerified,
+          matchScore: result?.identityMatchScore,
+          livenessPassed: result?.livenessPassed,
+          documentType: result?.documentType,
+          externalUserId: userId,
+        }
+      }, '*')
+    } else {
+      alert('✅ Verification complete!')
+    }
+  }
+
   const handleRetry = () => {
     setStep(1)
     setDocType(null)
     setDocumentFile(null)
-    setSelfieFile(null)
     setResult(null)
     setError(null)
     setLoading(false)
   }
 
+  if (!userId || !apiKey) {
+    return (
+      <div className="card">
+        <div className="error-state">
+          <h2>❌ Missing Session Info</h2>
+          <p>This verification session is invalid. Please restart the flow from your application.</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="page">
+    <div className={`page ${mode === 'modal' ? 'modal-mode' : ''}`}>
       <div className="card">
         {/* Logo */}
         <div className="logo">
@@ -106,10 +140,7 @@ export default function VerifyPage() {
             error={error}
             result={result}
             onRetry={handleRetry}
-            onContinue={() => {
-              // In real app: redirect to dashboard or next step
-              alert('✅ Verification complete! Redirecting to platform...')
-            }}
+            onContinue={handleContinue}
           />
         )}
 
@@ -136,6 +167,18 @@ export default function VerifyPage() {
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
         }
 
+        .modal-mode {
+          background: transparent;
+          padding: 0;
+        }
+
+        .modal-mode .card {
+          box-shadow: none;
+          max-width: 100%;
+          min-height: 100vh;
+          border-radius: 0;
+        }
+
         .card {
           background: white;
           border-radius: 20px;
@@ -144,6 +187,13 @@ export default function VerifyPage() {
           max-width: 480px;
           box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 8px 32px rgba(0,0,0,0.06);
         }
+
+        .error-state {
+          text-align: center;
+          padding: 40px 20px;
+        }
+        .error-state h2 { color: #ef4444; margin-bottom: 12px; }
+        .error-state p { color: #6b7280; font-size: 14px; }
 
         .logo {
           display: flex;
@@ -196,5 +246,13 @@ export default function VerifyPage() {
         }
       `}</style>
     </div>
+  )
+}
+
+export default function VerifyPage() {
+  return (
+    <Suspense fallback={<div className="page"><div className="card">Loading...</div></div>}>
+      <VerifyContent />
+    </Suspense>
   )
 }

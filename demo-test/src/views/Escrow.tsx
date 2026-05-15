@@ -41,7 +41,7 @@ export function Escrow() {
   const [confirmBtnsEnabled, setConfirmBtnsEnabled] = useState(false);
   
   const [sellerAccount, setSellerAccount] = useState('0123456789');
-  const [sellerBankCode, setSellerBankCode] = useState('058');
+  const [sellerBankCode, setSellerBankCode] = useState('000013');
   const [txRef, setTxRef] = useState('TX-TEST-001');
 
   useEffect(() => {
@@ -152,9 +152,19 @@ export function Escrow() {
           `Virtual account number withheld.\n` +
           `${data.message || ''}`
         );
+      } else if (flag === 'AMBER') {
+        setFraudOutput(
+          `⚠️ ELEVATED RISK — AMBER FLAG\n\n` +
+          `Score:          ${data.score}/100\n` +
+          `Flag:           ${flag}\n` +
+          `Signals:        ${(data.triggeredSignals || []).join(', ') || 'None'}\n\n` +
+          `Additional verification is required before payment can proceed.\n` +
+          `Virtual account number withheld until verification is completed.\n\n` +
+          `${data.message || ''}`
+        );
       } else {
         setFraudOutput(
-          `${flag === 'GREEN' ? '✅' : '⚠️'} FRAUD CHECK ${flag} — Payment Cleared\n\n` +
+          `✅ FRAUD CHECK GREEN — Payment Cleared\n\n` +
           `Score:          ${data.score}/100\n` +
           `Flag:           ${flag}\n` +
           `Signals:        ${(data.triggeredSignals || []).join(', ') || 'None'}\n\n` +
@@ -325,6 +335,34 @@ export function Escrow() {
               />
             </div>
           </div>
+
+          <button
+            onClick={async () => {
+              setAgreementOutput('⏳ Marking both buyer & seller as verified...');
+              setAgreementVariant('default');
+              try {
+                for (const userId of [state.buyerId, state.sellerId]) {
+                  const res = await fetch(`${state.backendUrl}/v1/developer/mark-verified`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'x-api-key': state.apiKey! },
+                    body: JSON.stringify({ externalUserId: userId }),
+                  });
+                  if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.message || 'Failed to mark verified');
+                  }
+                }
+                setAgreementOutput('✅ Both buyer & seller marked as verified!\n\n→ You can now create the agreement.');
+                setAgreementVariant('success');
+              } catch (err: any) {
+                setAgreementOutput(`❌ Error: ${err.message}`);
+                setAgreementVariant('error');
+              }
+            }}
+            className="w-full px-4 py-2 bg-green-700 hover:bg-green-600 rounded font-mono text-sm cursor-pointer border border-green-500"
+          >
+            ⚡ Mark Both Buyer & Seller as Verified (Skip Identity)
+          </button>
 
           <button
             onClick={createAgreement}

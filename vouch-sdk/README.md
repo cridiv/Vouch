@@ -162,7 +162,7 @@ console.log(`Agreement created with ID: ${agreement.id}`);
 
 ### 2. Assess Funding Risk & Issue Virtual Account (`vouch.escrow.assess`)
 
-Prior to depositing funds, evaluates the buyer for payment fraud. If the assessment flag is `GREEN` or `AMBER`, generates a dedicated virtual bank account to receive the escrow deposit.
+Prior to depositing funds, evaluates the buyer for payment fraud. If the assessment flag is `GREEN`, a dedicated virtual bank account is issued to receive the escrow deposit. If the flag is `AMBER`, additional verification is required before payment can proceed. If `RED`, the escrow is frozen.
 
 ```typescript
 const fundingCheck = await vouch.escrow.assess('agr_xyz789', {

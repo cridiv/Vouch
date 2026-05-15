@@ -26,7 +26,7 @@ export class IdentityService {
    */
   async verify(
     documentBuffer: Buffer,
-    selfieBuffer: Buffer,
+    selfieBuffers: Buffer[],
     externalUserId: string,
     developer: Developer,
     ipAddress: string,
@@ -38,16 +38,26 @@ export class IdentityService {
       developer.id,
     );
 
-    // 2. Convert buffers to base64 strings
-    const documentBase64 = documentBuffer.toString('base64');
-    const selfieBase64 = selfieBuffer.toString('base64');
-
-    // 3. Call ML Engine
+    // 2. Call ML Engine
     const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:8080';
     const formData = new FormData();
     formData.append('platform_user_id', platformUser.id);
-    formData.append('document_image', new Blob([new Uint8Array(documentBuffer)], { type: 'image/png' }), 'document.png');
-    formData.append('selfie_image', new Blob([new Uint8Array(selfieBuffer)], { type: 'image/png' }), 'selfie.png');
+    
+    // Add document
+    formData.append(
+      'document_image', 
+      new Blob([new Uint8Array(documentBuffer)], { type: 'image/png' }), 
+      'document.png'
+    );
+    
+    // Add multiple selfie frames
+    selfieBuffers.forEach((buffer, index) => {
+      formData.append(
+        'selfie_images', 
+        new Blob([new Uint8Array(buffer)], { type: 'image/png' }), 
+        `selfie_${index}.png`
+      );
+    });
 
     let result: {
       verified: boolean;
@@ -60,9 +70,9 @@ export class IdentityService {
     };
 
     try {
-      this.logger.log(`Calling ML Engine at ${mlUrl}/identity/verify for user ${platformUser.id}`);
+      this.logger.log(`Calling ML Engine at ${mlUrl}/identity/verify for user ${platformUser.id} with ${selfieBuffers.length} frames`);
       const response = await lastValueFrom(
-        this.httpService.post(`${mlUrl}/identity/verify`, formData, { timeout: 30000 })
+        this.httpService.post(`${mlUrl}/identity/verify`, formData, { timeout: 45000 })
       );
       result = response.data;
     } catch (error: any) {
@@ -105,8 +115,8 @@ export class IdentityService {
       score: Math.round(result.match_score),
       payload: {
         ...result,
-        documentBase64Length: documentBase64.length,
-        selfieBase64Length: selfieBase64.length,
+        totalSelfieFrames: selfieBuffers.length,
+        documentSize: documentBuffer.length,
       },
     });
 

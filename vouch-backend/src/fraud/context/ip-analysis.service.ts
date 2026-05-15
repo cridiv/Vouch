@@ -25,6 +25,13 @@ export class IpAnalysisService {
     geolocation: { country: string; city: string; lat: number; lng: number };
   }> {
     try {
+      // Skip external API call for localhost and private IPs — they'll never return useful data
+      const isLocal = ip === '127.0.0.1' || ip === '::1' || ip === 'localhost' || ip.startsWith('192.168.') || ip.startsWith('10.');
+      if (isLocal) {
+        this.logger.debug(`Skipping ProxyCheck for local/private IP: ${ip} — using safe defaults`);
+        return this.fallback();
+      }
+
       const result = await this.proxyCheck.checkIP(ip, {
         vpn: 3,   // highest VPN detection accuracy
         asn: 1,   // include ASN + geolocation data
@@ -37,6 +44,8 @@ export class IpAnalysisService {
         this.logger.warn(`ProxyCheck returned no data for IP: ${ip}`);
         return this.fallback();
       }
+
+      this.logger.log(`ProxyCheck result for ${ip}: vpn=${ipData.vpn}, proxy=${ipData.proxy}, risk=${ipData.risk}, country=${ipData.country}`);
 
       return {
         ip_reputation_score: typeof ipData.risk === 'number' ? ipData.risk : 50,

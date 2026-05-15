@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react';
 import { OutputPanel } from '../components/OutputPanel';
 import { storage } from '../lib/storage';
+import { Vouch } from 'vouch-sdk';
 
 export function Identity() {
-  const [buyerDoc, setBuyerDoc] = useState<File | null>(null);
-  const [buyerSelfie, setBuyerSelfie] = useState<File | null>(null);
-  const [sellerDoc, setSellerDoc] = useState<File | null>(null);
-  const [sellerSelfie, setSellerSelfie] = useState<File | null>(null);
-
   const [buyerOutput, setBuyerOutput] = useState('Waiting...');
   const [sellerOutput, setSellerOutput] = useState('Waiting...');
   const [buyerVariant, setBuyerVariant] = useState<'default' | 'success' | 'error'>('default');
@@ -20,6 +16,7 @@ export function Identity() {
     sellerId: null as string | null,
     agreementId: null as string | null,
     backendUrl: 'http://localhost:5000',
+    verifyUrl: 'http://localhost:3000', // The Next.js demo app
   });
 
   useEffect(() => {
@@ -28,47 +25,84 @@ export function Identity() {
     return () => clearInterval(interval);
   }, []);
 
+  const getVouch = () => {
+    if (!state.apiKey) return null;
+    return new Vouch(state.apiKey, {
+      apiUrl: `${state.backendUrl}/v1`,
+      verifyUrl: state.verifyUrl,
+    });
+  };
+
   const verify = async (role: 'buyer' | 'seller') => {
     const externalUserId = role === 'buyer' ? state.buyerId : state.sellerId;
-    const docFile = role === 'buyer' ? buyerDoc : sellerDoc;
-    const selfieFile = role === 'buyer' ? buyerSelfie : sellerSelfie;
     const setOutput = role === 'buyer' ? setBuyerOutput : setSellerOutput;
     const setVariant = role === 'buyer' ? setBuyerVariant : setSellerVariant;
 
-    if (!docFile || !selfieFile) {
-      setOutput('❌ Please select both document and selfie images');
+    const vouch = getVouch();
+    if (!vouch || !externalUserId) {
+      setOutput('❌ SDK not initialized or User ID missing');
       setVariant('error');
       return;
     }
 
-    setOutput('⏳ Running identity verification...\nThis may take 10-30 seconds (DeepFace loading)...');
+    setOutput('⏳ Opening Vouch Identity Modal...');
     setVariant('default');
 
     try {
-      const formData = new FormData();
-      formData.append('document_image', docFile);
-      formData.append('selfie_image', selfieFile);
-      formData.append('external_user_id', externalUserId!);
-      formData.append('device_fingerprint', `test-harness-fp-${role}`);
+      // Launch the modal!
+      const result = await vouch.identity.verify(externalUserId);
+      
+      console.log('Verification Result:', result);
 
-      const response = await fetch(`${state.backendUrl}/v1/identity/verify`, {
+      const verified = result.data.identityVerified;
+      setVariant(verified ? 'success' : 'error');
+      setOutput(
+        `${verified ? '✅ IDENTITY VERIFIED via Modal' : '❌ IDENTITY FAILED'}\n\n` +
+        `Face Match Score:  ${(result.data.identityMatchScore || 0).toFixed(1)}%\n` +
+        `Liveness Passed:   ${result.data.livenessPassed ? '✅ Yes' : '❌ No'}\n` +
+        `Document Type:     ${result.data.documentType || 'Unknown'}\n\n` +
+        `External User ID:  ${externalUserId}`
+      );
+    } catch (err: any) {
+      if (err.cancelled) {
+        setOutput('⚠️ Verification was cancelled by the user.');
+        setVariant('default');
+      } else {
+        setOutput(`❌ Error: ${err.message}`);
+        setVariant('error');
+      }
+    }
+  };
+
+  const markVerified = async (role: 'buyer' | 'seller') => {
+    const externalUserId = role === 'buyer' ? state.buyerId : state.sellerId;
+    const setOutput = role === 'buyer' ? setBuyerOutput : setSellerOutput;
+    const setVariant = role === 'buyer' ? setBuyerVariant : setSellerVariant;
+
+    setOutput('⏳ Marking as verified...');
+    setVariant('default');
+
+    try {
+      const response = await fetch(`${state.backendUrl}/v1/developer/mark-verified`, {
         method: 'POST',
-        headers: { 'x-api-key': state.apiKey! },
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': state.apiKey!,
+        },
+        body: JSON.stringify({ externalUserId }),
       });
 
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || JSON.stringify(data));
 
-      const verified = data.verified;
-      setVariant(verified ? 'success' : 'error');
+      setVariant('success');
       setOutput(
-        `${verified ? '✅ IDENTITY VERIFIED' : '❌ IDENTITY FAILED'}\n\n` +
-        `Face Match Score:  ${(data.match_score || 0).toFixed(1)}%\n` +
-        `Liveness Passed:   ${data.liveness_passed ? '✅ Yes' : '❌ No'}\n` +
-        `Document Type:     ${data.document_type || 'Unknown'}\n` +
-        `Rejection Reason:  ${data.rejection_reason || 'None'}\n\n` +
-        `External User ID:  ${externalUserId}`
+        `✅ IDENTITY MARKED AS VERIFIED (Test Bypass)\n\n` +
+        `Match Score:       95%\n` +
+        `Liveness Passed:   ✅ Yes\n` +
+        `Document Type:     test_bypass\n\n` +
+        `External User ID:  ${externalUserId}\n\n` +
+        `⚡ You can now test fraud/escrow flows without running the ML pipeline.`
       );
     } catch (err: any) {
       setOutput(`❌ Error: ${err.message}`);
@@ -92,43 +126,34 @@ export function Identity() {
       <h1 className="text-2xl font-bold text-blue-500 mb-6">Step 2 — Identity Verification</h1>
 
       <OutputPanel variant="success">
-        ✅ API Key loaded: {state.apiKey.slice(0, 20)}...{'\n'}
+        ✅ SDK Mode Enabled: Modal UI{'\n'}
         Buyer: {state.buyerId}{'\n'}
         Seller: {state.sellerId}
       </OutputPanel>
 
       <div className="grid grid-cols-2 gap-6 mt-6">
         {/* Buyer */}
-        <div className="border border-gray-800 p-4 rounded">
+        <div className="border border-gray-800 p-6 rounded-xl bg-gray-900/30">
           <h3 className="text-lg font-bold text-blue-400 mb-2">👤 Buyer</h3>
-          <div className="text-xs text-gray-500 mb-4">External ID: {state.buyerId}</div>
+          <div className="text-xs text-gray-500 mb-6">External ID: {state.buyerId}</div>
 
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Government ID (photo)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setBuyerDoc(e.target.files?.[0] || null)}
-                className="w-full text-sm text-gray-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Selfie</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setBuyerSelfie(e.target.files?.[0] || null)}
-                className="w-full text-sm text-gray-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer"
-              />
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-900/20 border border-blue-900/30 rounded-lg text-sm text-blue-100">
+              Identity verification will now open in a secure modal overlay.
             </div>
 
             <button
               onClick={() => verify('buyer')}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded font-mono text-sm cursor-pointer"
+              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold transition-all shadow-lg shadow-blue-900/20 cursor-pointer"
             >
               Verify Buyer Identity
+            </button>
+
+            <button
+              onClick={() => markVerified('buyer')}
+              className="w-full px-4 py-2 bg-transparent hover:bg-green-900/20 text-green-500 rounded-lg font-mono text-xs cursor-pointer border border-green-900/50 transition-all"
+            >
+              ⚡ Quick Skip (Mark as Verified)
             </button>
 
             <OutputPanel variant={buyerVariant}>{buyerOutput}</OutputPanel>
@@ -136,36 +161,27 @@ export function Identity() {
         </div>
 
         {/* Seller */}
-        <div className="border border-gray-800 p-4 rounded">
+        <div className="border border-gray-800 p-6 rounded-xl bg-gray-900/30">
           <h3 className="text-lg font-bold text-blue-400 mb-2">🏪 Seller</h3>
-          <div className="text-xs text-gray-500 mb-4">External ID: {state.sellerId}</div>
+          <div className="text-xs text-gray-500 mb-6">External ID: {state.sellerId}</div>
 
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Government ID (photo)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setSellerDoc(e.target.files?.[0] || null)}
-                className="w-full text-sm text-gray-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs text-gray-500 mb-1">Selfie</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setSellerSelfie(e.target.files?.[0] || null)}
-                className="w-full text-sm text-gray-400 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-600 file:text-white file:cursor-pointer"
-              />
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-900/20 border border-blue-900/30 rounded-lg text-sm text-blue-100">
+              Identity verification will now open in a secure modal overlay.
             </div>
 
             <button
               onClick={() => verify('seller')}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded font-mono text-sm cursor-pointer"
+              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-bold transition-all shadow-lg shadow-blue-900/20 cursor-pointer"
             >
               Verify Seller Identity
+            </button>
+
+            <button
+              onClick={() => markVerified('seller')}
+              className="w-full px-4 py-2 bg-transparent hover:bg-green-900/20 text-green-500 rounded-lg font-mono text-xs cursor-pointer border border-green-900/50 transition-all"
+            >
+              ⚡ Quick Skip (Mark as Verified)
             </button>
 
             <OutputPanel variant={sellerVariant}>{sellerOutput}</OutputPanel>

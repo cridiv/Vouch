@@ -1,7 +1,7 @@
 
 import logging
 import time
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from pathlib import Path
 
 import joblib
@@ -50,6 +50,7 @@ FRAUD_CARD_BINS = {"419999", "000000", "123456"}
 def calculate_rule_score(context: Dict) -> tuple:
     """Layer 1: Deterministic Weighted Rules (All backend-review fixes applied)"""
     triggered = []
+    has_critical = False
     
     # Hard override
     if context.get("impossible_travel"):
@@ -61,9 +62,11 @@ def calculate_rule_score(context: Dict) -> tuple:
     if context.get("is_vpn"):
         score += 15
         triggered.append("vpn_detected")
+        has_critical = True
     if context.get("is_proxy"):
         score += 15
         triggered.append("proxy_detected")
+        has_critical = True
     if context.get("location_distance_km", 0) > 500:
         score += 5
         triggered.append("unusual_location_distance")
@@ -100,10 +103,13 @@ def calculate_rule_score(context: Dict) -> tuple:
     else:
         score += 15
         triggered.append("identity_not_verified")
+        has_critical = True
     if context.get("identity_match_score", 0) > 95:
         score -= 5
     if context.get("liveness_passed"):
         score -= 8
+    else:
+        has_critical = True
 
     # Squad (null-safe)
     if context.get("squad_card_bin") in FRAUD_CARD_BINS:
@@ -114,7 +120,7 @@ def calculate_rule_score(context: Dict) -> tuple:
         triggered.append("amount_matches_agreement")
 
     score = max(0, min(100, score))
-    return score, triggered, False
+    return score, triggered, has_critical
 
 
 # ====================== LIGHTGBM LAYER ======================
@@ -165,8 +171,8 @@ class FraudAssessRequest(BaseModel):
     ip_reputation_score: int
     is_vpn: bool
     is_proxy: bool
-    geolocation: Dict[str, str]
-    onboarding_location: Optional[Dict[str, str]] = None
+    geolocation: Dict[str, Any]
+    onboarding_location: Optional[Dict[str, Any]] = None
     location_distance_km: float
     impossible_travel: bool
     
@@ -215,9 +221,9 @@ async def assess_fraud(context: FraudAssessRequest):
         # Layer 2: LightGBM
         ml_score = get_ml_score(context.dict(), rule_score)
         
-        # Ensemble
+        # Ensemble: ContextBuilder rules have 70% weight, ML model has 30% weight
         if ml_score is not None:
-            final_score = int(0.45 * rule_score + 0.55 * ml_score)
+            final_score = int(0.60 * rule_score + 0.40 * ml_score)
         else:
             final_score = rule_score
         

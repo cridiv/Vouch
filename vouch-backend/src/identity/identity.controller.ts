@@ -26,11 +26,11 @@ export class IdentityController {
     FileFieldsInterceptor(
       [
         { name: 'document_image', maxCount: 1 },
-        { name: 'selfie_image', maxCount: 1 },
+        { name: 'selfie_images', maxCount: 25 },
       ],
       {
         limits: {
-          fileSize: 5 * 1024 * 1024, // 5MB limit
+          fileSize: 10 * 1024 * 1024, // 10MB total limit
         },
         fileFilter: (req, file, callback) => {
           if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
@@ -48,23 +48,25 @@ export class IdentityController {
     @UploadedFiles()
     files: {
       document_image?: Express.Multer.File[];
-      selfie_image?: Express.Multer.File[];
+      selfie_images?: Express.Multer.File[];
     },
     @Body() body: VerifyIdentityDto,
     @CurrentDeveloper() developer: client.Developer,
     @Ip() ip: string,
   ) {
     const docFile = files.document_image?.[0];
-    const selfieFile = files.selfie_image?.[0];
+    const selfieFiles = files.selfie_images || [];
 
-    if (!docFile || !selfieFile) {
-      throw new BadRequestException('Both document_image and selfie_image files must be uploaded.');
+    if (!docFile || selfieFiles.length === 0) {
+      throw new BadRequestException('Both document_image and at least one selfie_image must be uploaded.');
     }
 
-    // Call the identity service
+    // Call the identity service with multiple selfie buffers
+    const selfieBuffers = selfieFiles.map(f => f.buffer);
+    
     const result = await this.identityService.verify(
       docFile.buffer,
-      selfieFile.buffer,
+      selfieBuffers,
       body.external_user_id,
       developer,
       ip,
@@ -75,7 +77,7 @@ export class IdentityController {
       status: result.verified ? 'success' : 'failed',
       message: result.verified ? 'Identity verified successfully' : 'Identity verification unsuccessful',
       data: {
-        id: 'usr_' + Date.now(),
+        id: 'idv_' + Math.random().toString(36).substr(2, 9),
         externalUserId: body.external_user_id,
         identityVerified: result.verified,
         identityMatchScore: result.match_score,

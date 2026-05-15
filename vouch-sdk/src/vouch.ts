@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { getDeviceFingerprint } from './fingerprint.js';
+import { openIdentityModal } from './identity-modal.js';
 
 export interface IdentityVerifyResult {
   status: string;
@@ -83,11 +84,21 @@ export interface AssessPaymentResponse {
   };
 }
 
+export interface VouchOptions {
+  apiUrl?: string;
+  verifyUrl?: string;
+}
+
 export class Vouch {
   private readonly http: AxiosInstance;
+  private readonly apiKey: string;
+  private readonly verifyUrl: string;
 
-  constructor(apiKey: string) {
-    const baseURL = (typeof process !== 'undefined' && process.env?.VOUCH_API_URL) || 'http://localhost:5000/v1';
+  constructor(apiKey: string, options: VouchOptions = {}) {
+    this.apiKey = apiKey;
+    const baseURL = options.apiUrl || (typeof process !== 'undefined' && process.env?.VOUCH_API_URL) || 'http://localhost:5000/v1';
+    this.verifyUrl = options.verifyUrl || 'http://localhost:3000';
+
     this.http = axios.create({
       baseURL,
       headers: { 'x-api-key': apiKey },
@@ -95,9 +106,30 @@ export class Vouch {
   }
 
   identity = {
-    verify: async (
+    /**
+     * Launch the Vouch Identity verification modal.
+     * @param externalUserId The ID of the user in your system.
+     * @returns A promise that resolves with the verification result when the user completes the flow.
+     */
+    verify: (externalUserId: string): Promise<IdentityVerifyResult> => {
+      return new Promise((resolve, reject) => {
+        openIdentityModal({
+          verifyUrl: this.verifyUrl,
+          apiKey: this.apiKey,
+          externalUserId,
+          onResult: resolve,
+          onError: reject,
+          onCancel: () => reject({ cancelled: true }),
+        });
+      });
+    },
+
+    /**
+     * Submit verification data with multiple selfie frames
+     */
+    submitVerification: async (
       documentFile: File | Blob,
-      selfieFile: File | Blob,
+      selfieFrames: (File | Blob)[],
       externalUserId: string
     ): Promise<IdentityVerifyResult> => {
       const deviceFingerprint = await getDeviceFingerprint();
@@ -106,7 +138,11 @@ export class Vouch {
       formData.append('external_user_id', externalUserId);
       formData.append('device_fingerprint', deviceFingerprint);
       formData.append('document_image', documentFile, 'document.png');
-      formData.append('selfie_image', selfieFile, 'selfie.png');
+      
+      // Append all frames
+      selfieFrames.forEach((file, index) => {
+        formData.append('selfie_images', file, `selfie_frame_${index}.jpg`);
+      });
 
       const res = await this.http.post<IdentityVerifyResult>('/identity/verify', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },

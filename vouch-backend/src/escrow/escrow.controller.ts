@@ -49,4 +49,17 @@ export class EscrowController {
   ) {
     return this.escrowService.assessPaymentRisk(id, dto, developer);
   }
+
+  /**
+   * DEV/TEST ONLY: Simulate a Squad payment webhook to move agreement to FUNDED.
+   */
+  @Post('agreements/:id/simulate-payment')
+  @UseGuards(ApiKeyGuard)
+  async simulatePayment(
+    @Param('id') id: string,
+    @Body() body: { transactionRef: string },
+    @CurrentDeveloper() developer: Developer,
+  ) {
+    return this.escrowService.simulatePayment(id, body.transactionRef, developer);
+  }
 }

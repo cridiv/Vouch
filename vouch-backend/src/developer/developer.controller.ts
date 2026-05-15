@@ -105,4 +105,18 @@ export class DeveloperController {
     }
     return log;
   }
+
+  /**
+   * DEV/TEST ONLY: Mark a platform user's identity as verified without running the ML pipeline.
+   * Useful for testing fraud and escrow flows independently.
+   */
+  @Post('mark-verified')
+  @UseGuards(ApiKeyGuard)
+  @HttpCode(HttpStatus.OK)
+  async markVerified(
+    @CurrentDeveloper() developer: client.Developer,
+    @Body() body: { externalUserId: string },
+  ) {
+    return this.developerService.markUserVerified(body.externalUserId, developer.id);
+  }
 }

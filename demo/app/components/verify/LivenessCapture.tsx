@@ -3,39 +3,40 @@
 import { useRef, useState, useEffect, useCallback } from 'react'
 
 interface Props {
-  onComplete: (selfieFile: File) => void
+  onComplete: (frames: File[]) => void
   onBack: () => void
 }
 
-type Phase = 'intro' | 'loading' | 'detecting' | 'blink_prompt' | 'blink_done' | 'captured'
+type Phase = 'intro' | 'loading' | 'ready' | 'recording' | 'processing' | 'complete'
+
+const RECORDING_DURATION_MS = 3000
+const TARGET_FRAMES = 15 // Extract 15 frames from the 3-second video
+const FRAME_INTERVAL = RECORDING_DURATION_MS / TARGET_FRAMES
 
 export default function LivenessCapture({ onComplete, onBack }: Props) {
   const [phase, setPhase] = useState<Phase>('intro')
   const [error, setError] = useState<string | null>(null)
-  const [blinkCount, setBlinkCount] = useState(0)
   const [faceDetected, setFaceDetected] = useState(false)
-  const [capturedFile, setCapturedFile] = useState<File | null>(null)
-  const [capturedUrl, setCapturedUrl] = useState<string | null>(null)
+  const [faceInOval, setFaceInOval] = useState(false)
+  const [recordingProgress, setRecordingProgress] = useState(0) // 0-100
+  const [countdown, setCountdown] = useState(3)
 
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const overlayCanvasRef = useRef<HTMLCanvasElement>(null)
+  const overlayRef = useRef<HTMLCanvasElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const animFrameRef = useRef<number | null>(null)
   const faceApiRef = useRef<any>(null)
-  const lastEarRef = useRef<number>(1)
-  const blinkCooldownRef = useRef(false)
-  const blinkCountRef = useRef(0)
+  const recordedChunksRef = useRef<Blob[]>([])
+  const recordingStartTimeRef = useRef<number>(0)
 
-  const EAR_THRESHOLD = 0.22
-  const BLINKS_REQUIRED = 2
+  // ── Initialization ──────────────────────────────────────────────────────────
 
   const loadFaceApi = useCallback(async () => {
-    if (typeof window === 'undefined') return
     setPhase('loading')
+    setError(null)
 
     try {
-      // Dynamically load face-api.js
       if (!(window as any).faceapi) {
         await new Promise<void>((resolve, reject) => {
           const script = document.createElement('script')
@@ -46,18 +47,17 @@ export default function LivenessCapture({ onComplete, onBack }: Props) {
         })
       }
       faceApiRef.current = (window as any).faceapi
-
-      // Load models from CDN
-      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model'
       const faceapi = faceApiRef.current
+
+      const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model'
       await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
         faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
       ])
 
       await startCamera()
     } catch (err: any) {
-      setError('Could not load face detection. Please ensure you have a stable connection.')
+      setError(err.message || 'Failed to load face detection modules')
       setPhase('intro')
     }
   }, [])
@@ -65,415 +65,347 @@ export default function LivenessCapture({ onComplete, onBack }: Props) {
   const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        audio: false,
       })
       streamRef.current = stream
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream
         await videoRef.current.play()
       }
-      setPhase('detecting')
+
+      setPhase('ready')
       startDetectionLoop()
-    } catch {
-      setError('Camera access was denied. Please allow camera access and try again.')
+    } catch (err) {
+      setError('Camera access denied. Please allow camera access in your browser.')
       setPhase('intro')
     }
   }, [])
 
-  const computeEAR = (landmarks: any, eyeIndices: number[]) => {
-    const pts = eyeIndices.map((i: number) => landmarks.positions[i])
-    const A = Math.hypot(pts[1].x - pts[5].x, pts[1].y - pts[5].y)
-    const B = Math.hypot(pts[2].x - pts[4].x, pts[2].y - pts[4].y)
-    const C = Math.hypot(pts[0].x - pts[3].x, pts[0].y - pts[3].y)
-    return (A + B) / (2.0 * C)
-  }
+  // ── Detection Loop ──────────────────────────────────────────────────────────
 
   const startDetectionLoop = useCallback(() => {
     const faceapi = faceApiRef.current
-    if (!faceapi || !videoRef.current || !overlayCanvasRef.current) return
-
-    const video = videoRef.current
-    const canvas = overlayCanvasRef.current
+    if (!faceapi) return
 
     const detect = async () => {
-      if (!video || video.paused || video.ended) return
+      const video = videoRef.current
+      const overlay = overlayRef.current
+      
+      if (!video || !overlay || video.paused || video.ended || video.readyState < 2) {
+        animFrameRef.current = requestAnimationFrame(detect)
+        return
+      }
+
+      const vw = video.videoWidth || 640
+      const vh = video.videoHeight || 480
+      overlay.width = vw
+      overlay.height = vh
+      const ctx = overlay.getContext('2d')
 
       const detection = await faceapi
-        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 }))
+        .detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
         .withFaceLandmarks(true)
 
-      const ctx = canvas.getContext('2d')
       if (ctx) {
-        canvas.width = video.videoWidth || 640
-        canvas.height = video.videoHeight || 480
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-      }
+        ctx.clearRect(0, 0, vw, vh)
 
-      if (detection) {
-        setFaceDetected(true)
-        setPhase(prev => prev === 'detecting' ? 'blink_prompt' : prev)
+        const ovalCX = vw / 2
+        const ovalCY = vh / 2
+        const ovalW = vw * 0.55
+        const ovalH = vh * 0.78
 
-        // LEFT eye: 36-41, RIGHT eye: 42-47
-        const leftEAR = computeEAR(detection.landmarks, [36, 37, 38, 39, 40, 41])
-        const rightEAR = computeEAR(detection.landmarks, [42, 43, 44, 45, 46, 47])
-        const avgEAR = (leftEAR + rightEAR) / 2
+        // Draw HUD Mask
+        ctx.save()
+        ctx.beginPath()
+        ctx.rect(0, 0, vw, vh)
+        ctx.ellipse(ovalCX, ovalCY, ovalW / 2, ovalH / 2, 0, 0, Math.PI * 2, true)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.7)'
+        ctx.fill()
 
-        const wasClosed = lastEarRef.current < EAR_THRESHOLD
-        const isOpen = avgEAR >= EAR_THRESHOLD
-
-        if (wasClosed && isOpen && !blinkCooldownRef.current) {
-          blinkCooldownRef.current = true
-          blinkCountRef.current += 1
-          setBlinkCount(blinkCountRef.current)
-          setTimeout(() => { blinkCooldownRef.current = false }, 500)
-
-          if (blinkCountRef.current >= BLINKS_REQUIRED) {
-            setPhase('blink_done')
-            setTimeout(() => captureFrame(), 600)
-            return
-          }
-        }
-        lastEarRef.current = avgEAR
-
-        // Draw face box on overlay
-        if (ctx) {
+        if (detection) {
           const box = detection.detection.box
-          ctx.strokeStyle = blinkCountRef.current > 0 ? '#10b981' : '#111'
-          ctx.lineWidth = 2
+          const faceCX = box.x + box.width / 2
+          const faceCY = box.y + box.height / 2
+
+          // Check if face is centered in oval (Very relaxed)
+          const withinX = Math.abs(faceCX - ovalCX) < ovalW * 0.45
+          const withinY = Math.abs(faceCY - ovalCY) < ovalH * 0.4
+          const goodSize = box.width > ovalW * 0.2 && box.width < ovalW * 1.25
+          const inOval = withinX && withinY && goodSize
+
+          setFaceDetected(true)
+          setFaceInOval(inOval)
+
+          // Debug: Draw face center dot and box
+          ctx.fillStyle = inOval ? '#10b981' : '#f59e0b'
+          ctx.beginPath()
+          ctx.arc(faceCX, faceCY, 5, 0, Math.PI * 2)
+          ctx.fill()
+          
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)'
+          ctx.lineWidth = 1
           ctx.strokeRect(box.x, box.y, box.width, box.height)
+
+          ctx.beginPath()
+          ctx.ellipse(ovalCX, ovalCY, ovalW / 2, ovalH / 2, 0, 0, Math.PI * 2)
+          ctx.strokeStyle = inOval ? '#10b981' : '#f59e0b'
+          ctx.lineWidth = 5
+          ctx.stroke()
+        } else {
+          setFaceDetected(false)
+          setFaceInOval(false)
+          ctx.beginPath()
+          ctx.ellipse(ovalCX, ovalCY, ovalW / 2, ovalH / 2, 0, 0, Math.PI * 2)
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
+          ctx.lineWidth = 4
+          ctx.stroke()
         }
-      } else {
-        setFaceDetected(false)
+        ctx.restore()
       }
 
-      animFrameRef.current = requestAnimationFrame(detect)
+      if (phase === 'ready' || phase === 'recording') {
+        animFrameRef.current = requestAnimationFrame(detect)
+      }
     }
 
     animFrameRef.current = requestAnimationFrame(detect)
+  }, [phase])
+
+  // ── Recording & Processing ──────────────────────────────────────────────────
+
+  const startRecording = useCallback(() => {
+    if (!streamRef.current) return
+
+    setPhase('recording')
+    recordedChunksRef.current = []
+    recordingStartTimeRef.current = Date.now()
+
+    const mediaRecorder = new MediaRecorder(streamRef.current, {
+      mimeType: 'video/webm;codecs=vp8',
+    })
+
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data)
+    }
+
+    mediaRecorder.onstop = async () => {
+      setPhase('processing')
+      const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' })
+      await processVideo(blob)
+    }
+
+    mediaRecorderRef.current = mediaRecorder
+    mediaRecorder.start()
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - recordingStartTimeRef.current
+      const progress = Math.min((elapsed / RECORDING_DURATION_MS) * 100, 100)
+      setRecordingProgress(progress)
+      setCountdown(Math.ceil((RECORDING_DURATION_MS - elapsed) / 1000))
+
+      if (elapsed >= RECORDING_DURATION_MS) {
+        clearInterval(interval)
+        if (mediaRecorder.state === 'recording') mediaRecorder.stop()
+      }
+    }, 50)
   }, [])
 
-  const captureFrame = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return
-    const video = videoRef.current
-    const canvas = canvasRef.current
+  const processVideo = async (blob: Blob) => {
+    const videoUrl = URL.createObjectURL(blob)
+    const video = document.createElement('video')
+    video.src = videoUrl
+    video.muted = true
+    await new Promise(r => video.onloadedmetadata = r)
+
+    const canvas = document.createElement('canvas')
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    ctx.drawImage(video, 0, 0)
-    canvas.toBlob((blob) => {
-      if (!blob) return
-      const f = new File([blob], 'selfie.jpg', { type: 'image/jpeg' })
-      const url = URL.createObjectURL(f)
-      setCapturedFile(f)
-      setCapturedUrl(url)
-      setPhase('captured')
-      stopCamera()
-    }, 'image/jpeg', 0.92)
-  }, [])
+    const ctx = canvas.getContext('2d')!
+    const frames: File[] = []
+
+    for (let i = 0; i < TARGET_FRAMES; i++) {
+      video.currentTime = (i * FRAME_INTERVAL) / 1000
+      await new Promise(r => video.onseeked = r)
+      
+      ctx.save()
+      ctx.scale(-1, 1)
+      ctx.drawImage(video, -canvas.width, 0)
+      ctx.restore()
+
+      const frameBlob = await new Promise<Blob>(r => canvas.toBlob(b => r(b!), 'image/jpeg', 0.9))
+      frames.push(new File([frameBlob], `frame_${i}.jpg`, { type: 'image/jpeg' }))
+    }
+
+    URL.revokeObjectURL(videoUrl)
+    setPhase('complete')
+    stopCamera()
+    onComplete(frames)
+  }
 
   const stopCamera = useCallback(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current)
     streamRef.current?.getTracks().forEach(t => t.stop())
+    if (mediaRecorderRef.current?.state === 'recording') mediaRecorderRef.current.stop()
   }, [])
 
   useEffect(() => {
-    if ((phase === 'detecting' || phase === 'blink_prompt' || phase === 'blink_done') && videoRef.current && streamRef.current) {
-      if (videoRef.current.srcObject !== streamRef.current) {
-        videoRef.current.srcObject = streamRef.current
-        videoRef.current.play().catch(e => console.error('Video play error:', e))
+    return () => stopCamera()
+  }, [stopCamera])
+
+  useEffect(() => {
+    const video = videoRef.current
+    if (video && streamRef.current && (phase === 'ready' || phase === 'recording')) {
+      if (video.srcObject !== streamRef.current) {
+        video.srcObject = streamRef.current
+        video.play().catch(console.error)
       }
     }
   }, [phase])
 
-  useEffect(() => {
-    return () => {
-      stopCamera()
-      if (capturedUrl) URL.revokeObjectURL(capturedUrl)
-    }
-  }, [stopCamera])
-
-  const retry = () => {
-    if (capturedUrl) URL.revokeObjectURL(capturedUrl)
-    setCapturedFile(null)
-    setCapturedUrl(null)
-    setBlinkCount(0)
-    blinkCountRef.current = 0
-    setFaceDetected(false)
-    setPhase('intro')
-    streamRef.current?.getTracks().forEach(t => t.stop())
-  }
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div>
+    <div className="liveness-capture">
       <div className="section-header">
-        <h2>Face verification</h2>
-        <p>We need to confirm you're a real person. Look at the camera and blink twice naturally.</p>
+        <h2>Identity Verification</h2>
+        <p>Position your face within the oval and record a 3-second video selfie.</p>
       </div>
 
       {phase === 'intro' && (
-        <div>
-          {error && (
-            <div className="error-box">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="7" stroke="#ef4444" strokeWidth="1.5" />
-                <path d="M8 5v3M8 10h.01" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-              {error}
-            </div>
-          )}
-
-          <div className="intro-instructions">
-            <div className="instruction-item">
-              <div className="instruction-icon">💡</div>
+        <div className="intro-view">
+          {error && <div className="error-pill">⚠️ {error}</div>}
+          <div className="guide-cards">
+            <div className="guide-card">
+              <span className="icon">💡</span>
               <div>
-                <p className="instruction-title">Good lighting</p>
-                <p className="instruction-sub">Find a well-lit area, facing a light source</p>
+                <h4>Proper Lighting</h4>
+                <p>Ensure your face is clearly visible without strong shadows.</p>
               </div>
             </div>
-            <div className="instruction-item">
-              <div className="instruction-icon">👁</div>
+            <div className="guide-card">
+              <span className="icon">👤</span>
               <div>
-                <p className="instruction-title">Blink twice</p>
-                <p className="instruction-sub">Blink naturally when prompted — slow and deliberate</p>
-              </div>
-            </div>
-            <div className="instruction-item">
-              <div className="instruction-icon">📱</div>
-              <div>
-                <p className="instruction-title">Face the camera</p>
-                <p className="instruction-sub">Keep your face centred and still</p>
+                <h4>Stay Centered</h4>
+                <p>Keep your face within the guide for the entire 3 seconds.</p>
               </div>
             </div>
           </div>
-
-          <button className="primary-btn" onClick={loadFaceApi} type="button">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" />
-            </svg>
-            Start camera
+          <button className="primary-action-btn" onClick={loadFaceApi}>
+            Start Camera
           </button>
-          <button className="ghost-btn" onClick={onBack} type="button">← Back</button>
+          <button className="secondary-text-btn" onClick={onBack}>← Go Back</button>
         </div>
       )}
 
       {phase === 'loading' && (
-        <div className="loading-state">
-          <div className="spinner-large" />
-          <p className="loading-text">Loading face detection models...</p>
-          <p className="loading-sub">This may take a moment on first load</p>
+        <div className="loading-view">
+          <div className="pulse-loader" />
+          <p>Initializing security modules...</p>
         </div>
       )}
 
-      {(phase === 'detecting' || phase === 'blink_prompt' || phase === 'blink_done') && (
-        <div className="camera-wrapper">
-          <div className="video-container">
-            <video ref={videoRef} playsInline muted className="camera-video" />
-            <canvas ref={overlayCanvasRef} className="overlay-canvas" />
-            <canvas ref={canvasRef} style={{ display: 'none' }} />
+      {(phase === 'ready' || phase === 'recording') && (
+        <div className="capture-view">
+          <div className={`status-banner ${faceInOval ? 'success' : 'warning'}`}>
+            {phase === 'recording' ? (
+              <span className="recording-label"><span className="dot" /> Recording...</span>
+            ) : faceInOval ? (
+              'Ready to record'
+            ) : faceDetected ? (
+              'Center your face in the oval'
+            ) : (
+              'Position your face'
+            )}
+          </div>
 
-            {/* Face detection status */}
-            <div className={`face-status ${faceDetected ? 'detected' : 'searching'}`}>
-              {faceDetected ? (
-                <>
-                  <div className="status-dot green" />
-                  Face detected
-                </>
-              ) : (
-                <>
-                  <div className="status-dot searching" />
-                  Looking for face...
-                </>
-              )}
+          <div className="video-viewport">
+            <video ref={videoRef} autoPlay playsInline muted className="camera-feed" />
+            <canvas ref={overlayRef} className="hud-overlay" />
+            
+            {phase === 'recording' && (
+              <div className="recording-countdown">{countdown}</div>
+            )}
+            
+            <div className="progress-track">
+              <div className="progress-thumb" style={{ width: `${recordingProgress}%` }} />
             </div>
-
-            {/* Blink progress */}
-            {phase === 'blink_prompt' && (
-              <div className="blink-overlay">
-                <p className="blink-instruction">Blink {BLINKS_REQUIRED} times</p>
-                <div className="blink-dots">
-                  {Array.from({ length: BLINKS_REQUIRED }).map((_, i) => (
-                    <div key={i} className={`blink-dot ${i < blinkCount ? 'done' : ''}`} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {phase === 'blink_done' && (
-              <div className="blink-success-overlay">
-                <div className="blink-success-icon">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <path d="M5 13l4 4L19 7" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <p>Liveness confirmed</p>
-              </div>
-            )}
           </div>
 
-          <div className="camera-hint">
-            {phase === 'detecting' && !faceDetected && 'Position your face in the frame'}
-            {phase === 'detecting' && faceDetected && 'Face detected — preparing...'}
-            {phase === 'blink_prompt' && `Blink naturally ${BLINKS_REQUIRED} times (${blinkCount}/${BLINKS_REQUIRED})`}
-            {phase === 'blink_done' && 'Capturing...'}
-          </div>
-
-          <div className="camera-actions" style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <button className="primary-btn" onClick={captureFrame} type="button">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10" />
-                <circle cx="12" cy="12" r="3" fill="currentColor" />
-              </svg>
-              Capture photo
+          {phase === 'ready' && (
+            <button 
+              className="record-btn" 
+              onClick={startRecording}
+            >
+              <div className="inner-circle" />
+              Start 3s Recording
             </button>
-            <button className="ghost-btn" onClick={() => { stopCamera(); onBack(); }} type="button">Cancel</button>
-          </div>
+          )}
+
+          <button className="cancel-btn" onClick={() => { stopCamera(); onBack(); }}>Cancel</button>
         </div>
       )}
 
-      {phase === 'captured' && capturedUrl && (
-        <div>
-          <div className="captured-container">
-            <img src={capturedUrl} alt="Captured selfie" className="captured-img" />
-            <div className="captured-badge">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <circle cx="8" cy="8" r="8" fill="#10b981" />
-                <path d="M4.5 8l2.5 2.5 4.5-5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              Selfie captured
-            </div>
-          </div>
+      {phase === 'processing' && (
+        <div className="processing-view">
+          <div className="spinner" />
+          <h3>Processing Video</h3>
+          <p>Extracting biometric frames for verification...</p>
+        </div>
+      )}
 
-          <div className="captured-actions">
-            <button className="primary-btn" onClick={() => capturedFile && onComplete(capturedFile)} type="button">
-              Continue to verification
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <button className="ghost-btn" onClick={retry} type="button">Retake selfie</button>
-          </div>
+      {phase === 'complete' && (
+        <div className="complete-view">
+          <div className="check-icon">✓</div>
+          <h3>Capture Complete</h3>
+          <p>Submitting your data securely.</p>
         </div>
       )}
 
       <style jsx>{`
-        .section-header { margin-bottom: 24px; }
-        .section-header h2 { font-size: 20px; font-weight: 600; color: #111; margin-bottom: 6px; letter-spacing: -0.02em; }
-        .section-header p { font-size: 14px; color: #6b7280; line-height: 1.5; }
+        .liveness-capture { width: 100%; max-width: 440px; margin: 0 auto; }
+        .section-header { margin-bottom: 24px; text-align: center; }
+        .section-header h2 { font-size: 22px; font-weight: 700; color: #111; margin-bottom: 8px; }
+        .section-header p { font-size: 14px; color: #6b7280; }
 
-        .error-box {
-          display: flex; align-items: flex-start; gap: 8px;
-          background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px;
-          padding: 12px 14px; font-size: 13px; color: #dc2626; margin-bottom: 16px;
-        }
+        .guide-cards { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+        .guide-card { display: flex; gap: 16px; padding: 16px; background: #f9fafb; border-radius: 12px; align-items: center; }
+        .guide-card .icon { font-size: 24px; }
+        .guide-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 2px; }
+        .guide-card p { font-size: 13px; color: #6b7280; }
 
-        .intro-instructions { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
-        .instruction-item {
-          display: flex; align-items: flex-start; gap: 12px;
-          padding: 14px; background: #f9fafb; border-radius: 10px;
-        }
-        .instruction-icon { font-size: 20px; flex-shrink: 0; }
-        .instruction-title { font-size: 13px; font-weight: 600; color: #111; margin-bottom: 2px; }
-        .instruction-sub { font-size: 12px; color: #9ca3af; }
+        .video-viewport { position: relative; border-radius: 20px; overflow: hidden; background: #000; aspect-ratio: 4/5; margin-bottom: 20px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); }
+        .camera-feed { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .hud-overlay { position: absolute; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); pointer-events: none; }
 
-        .loading-state {
-          display: flex; flex-direction: column; align-items: center;
-          gap: 12px; padding: 48px 24px; text-align: center;
-        }
-        .spinner-large {
-          width: 40px; height: 40px; border: 2.5px solid #e5e7eb;
-          border-top-color: #111; border-radius: 50%; animation: spin 0.7s linear infinite;
-        }
+        .status-banner { text-align: center; padding: 10px; border-radius: 12px; font-size: 13px; font-weight: 600; margin-bottom: 12px; transition: all 0.3s; }
+        .status-banner.success { background: #ecfdf5; color: #059669; }
+        .status-banner.warning { background: #fffbeb; color: #d97706; }
+
+        .recording-countdown { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 80px; font-weight: 800; color: white; text-shadow: 0 4px 12px rgba(0,0,0,0.5); pointer-events: none; }
+        .recording-label { display: flex; align-items: center; justify-content: center; gap: 8px; color: #ef4444; }
+        .recording-label .dot { width: 8px; height: 8px; background: #ef4444; border-radius: 50%; animation: blink 1s infinite; }
+
+        .progress-track { position: absolute; bottom: 0; left: 0; right: 0; height: 6px; background: rgba(255,255,255,0.2); }
+        .progress-thumb { height: 100%; background: #10b981; transition: width 0.1s linear; }
+
+        .record-btn { width: 100%; padding: 16px; background: #111; color: white; border: none; border-radius: 14px; font-size: 16px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 12px; }
+        .record-btn:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+        .record-btn .inner-circle { width: 12px; height: 12px; background: #ef4444; border-radius: 50%; }
+
+        .primary-action-btn { width: 100%; padding: 16px; background: #111; color: white; border: none; border-radius: 14px; font-size: 16px; font-weight: 600; cursor: pointer; }
+        .secondary-text-btn { width: 100%; margin-top: 12px; background: none; border: none; color: #6b7280; font-size: 14px; cursor: pointer; }
+        .cancel-btn { width: 100%; background: none; border: none; color: #6b7280; font-size: 14px; cursor: pointer; }
+
+        .loading-view, .processing-view, .complete-view { display: flex; flex-direction: column; align-items: center; padding: 60px 0; text-align: center; }
+        .pulse-loader { width: 50px; height: 50px; border: 4px solid #f3f4f6; border-top-color: #111; border-radius: 50%; animation: spin 1s infinite linear; }
+        .spinner { width: 40px; height: 40px; border: 3px solid #f3f4f6; border-top-color: #3b82f6; border-radius: 50%; animation: spin 1s infinite linear; margin-bottom: 16px; }
+        .check-icon { width: 60px; height: 60px; background: #10b981; color: white; font-size: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+
         @keyframes spin { to { transform: rotate(360deg); } }
-        .loading-text { font-size: 15px; font-weight: 500; color: #374151; }
-        .loading-sub { font-size: 13px; color: #9ca3af; }
-
-        .camera-wrapper { display: flex; flex-direction: column; gap: 12px; }
-        .video-container {
-          position: relative; border-radius: 14px; overflow: hidden;
-          background: #111; aspect-ratio: 4/3;
-        }
-        .camera-video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        .overlay-canvas {
-          position: absolute; inset: 0; width: 100%; height: 100%;
-          transform: scaleX(-1); pointer-events: none;
-        }
-
-        .face-status {
-          position: absolute; top: 12px; left: 12px;
-          background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
-          border-radius: 20px; padding: 5px 10px;
-          font-size: 12px; font-weight: 500; color: white;
-          display: flex; align-items: center; gap: 6px;
-        }
-        .status-dot {
-          width: 7px; height: 7px; border-radius: 50%;
-        }
-        .status-dot.green { background: #10b981; }
-        .status-dot.searching { background: #f59e0b; animation: blink-anim 1s ease-in-out infinite; }
-        @keyframes blink-anim { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-        .blink-overlay {
-          position: absolute; bottom: 0; left: 0; right: 0;
-          background: linear-gradient(to top, rgba(0,0,0,0.8), transparent);
-          padding: 20px 16px 16px;
-          display: flex; flex-direction: column; align-items: center; gap: 10px;
-        }
-        .blink-instruction { font-size: 14px; font-weight: 600; color: white; }
-        .blink-dots { display: flex; gap: 8px; }
-        .blink-dot {
-          width: 12px; height: 12px; border-radius: 50%;
-          border: 2px solid rgba(255,255,255,0.5);
-          transition: all 0.2s ease;
-        }
-        .blink-dot.done { background: #10b981; border-color: #10b981; transform: scale(1.2); }
-
-        .blink-success-overlay {
-          position: absolute; inset: 0; background: rgba(16,185,129,0.2);
-          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-        }
-        .blink-success-icon {
-          width: 52px; height: 52px; background: #10b981; border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .blink-success-overlay p { font-size: 16px; font-weight: 600; color: white; }
-
-        .camera-hint {
-          text-align: center; font-size: 13px; color: #6b7280; min-height: 20px;
-        }
-
-        .captured-container {
-          position: relative; border-radius: 14px; overflow: hidden;
-          border: 1.5px solid #e5e7eb; margin-bottom: 16px;
-        }
-        .captured-img {
-          width: 100%; display: block; max-height: 300px;
-          object-fit: contain; background: #f9fafb; transform: scaleX(-1);
-        }
-        .captured-badge {
-          position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
-          background: white; border: 1px solid #e5e7eb; border-radius: 20px;
-          padding: 5px 12px; font-size: 12px; font-weight: 500; color: #111;
-          display: flex; align-items: center; gap: 5px; white-space: nowrap;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
-
-        .captured-actions { display: flex; flex-direction: column; gap: 8px; }
-
-        .primary-btn {
-          width: 100%; padding: 14px 24px; background: #111; color: white;
-          border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
-          cursor: pointer; display: flex; align-items: center; justify-content: center;
-          gap: 8px; transition: all 0.15s ease; letter-spacing: -0.01em;
-        }
-        .primary-btn:hover { background: #222; transform: translateY(-1px); }
-
-        .ghost-btn {
-          width: 100%; padding: 12px; background: transparent; color: #6b7280;
-          border: 1.5px solid #e5e7eb; border-radius: 10px; font-size: 14px;
-          font-weight: 500; cursor: pointer; transition: all 0.15s ease;
-        }
-        .ghost-btn:hover { border-color: #9ca3af; color: #374151; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+        .error-pill { padding: 10px 16px; background: #fef2f2; color: #dc2626; border-radius: 10px; font-size: 13px; margin-bottom: 16px; text-align: center; }
       `}</style>
     </div>
   )
