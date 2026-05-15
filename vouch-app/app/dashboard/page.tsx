@@ -43,10 +43,7 @@ const DashboardPage = () => {
   useEffect(() => {
     let mounted = true;
 
-    // Use onAuthStateChange to handle the session processing from URL hash
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
+    const handleSession = async (session: any) => {
       const user = session?.user;
 
       if (user) {
@@ -101,6 +98,20 @@ const DashboardPage = () => {
         if (!hasHash) {
           window.location.href = "/signin";
         }
+      }
+    };
+
+    // 1. Check current session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (mounted) {
+        handleSession(session);
+      }
+    });
+
+    // 2. Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (mounted) {
+        handleSession(session);
       }
     });
 
