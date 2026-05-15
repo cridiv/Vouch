@@ -83,8 +83,6 @@ export default function VerificationResult({ loading, error, result, onRetry, on
   if (!result) return null
 
   const passed = result.identityVerified && result.livenessPassed
-  const score = result.identityMatchScore ?? 0
-  const scoreColor = score >= 90 ? '#10b981' : score >= 75 ? '#f59e0b' : '#ef4444'
 
   return (
     <div className="result-state">
@@ -108,33 +106,12 @@ export default function VerificationResult({ loading, error, result, onRetry, on
           : 'We could not fully verify your identity. Please ensure your document is valid and try again.'}
       </p>
 
-      {/* Score breakdown */}
-      <div className="score-card">
-        <div className="score-row">
-          <span className="score-label">Face match score</span>
-          <span className="score-value" style={{ color: scoreColor }}>{score.toFixed(1)}%</span>
-        </div>
-        <div className="score-bar-bg">
-          <div
-            className="score-bar-fill"
-            style={{ width: `${score}%`, background: scoreColor }}
-          />
-        </div>
-
-        <div className="check-list">
-          <CheckItem label="Identity document" passed={result.identityVerified} />
-          <CheckItem label="Liveness detection" passed={result.livenessPassed} />
-          <CheckItem label="Face match" passed={score >= 75} />
-        </div>
-
-        {result.documentType && (
-          <div className="doc-type-tag">
-            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-              <rect x="2" y="2" width="12" height="12" rx="2" stroke="#6b7280" strokeWidth="1.5" />
-              <path d="M5 8h6M5 11h4" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
-            {formatDocType(result.documentType)}
-          </div>
+      {/* Simplified result message */}
+      <div className="status-container">
+        {passed ? (
+          <div className="success-badge">Verification Secure</div>
+        ) : (
+          <div className="fail-badge">Check Failed</div>
         )}
       </div>
 
@@ -154,6 +131,18 @@ export default function VerificationResult({ loading, error, result, onRetry, on
 
       <style jsx>{`
         .result-state { display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 8px 0; text-align: center; }
+        .status-container { margin: 12px 0; }
+        .success-badge {
+          display: inline-flex; padding: 6px 14px; background: #ecfdf5;
+          color: #059669; border-radius: 20px; font-size: 13px; font-weight: 700;
+          letter-spacing: 0.02em; text-transform: uppercase;
+        }
+        .fail-badge {
+          display: inline-flex; padding: 6px 14px; background: #fef2f2;
+          color: #dc2626; border-radius: 20px; font-size: 13px; font-weight: 700;
+          letter-spacing: 0.02em; text-transform: uppercase;
+        }
+
         .result-icon {
           width: 72px; height: 72px; border-radius: 50%;
           display: flex; align-items: center; justify-content: center;
@@ -196,30 +185,6 @@ export default function VerificationResult({ loading, error, result, onRetry, on
   )
 }
 
-function CheckItem({ label, passed }: { label: string; passed: boolean }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-      <div style={{
-        width: 20, height: 20, borderRadius: '50%',
-        background: passed ? '#111' : '#fef2f2',
-        border: `1.5px solid ${passed ? '#111' : '#fecaca'}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-      }}>
-        {passed ? (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M2 5l2 2 4-4" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        ) : (
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M3 7l4-4M7 7L3 3" stroke="#ef4444" strokeWidth="1.5" strokeLinecap="round" />
-          </svg>
-        )}
-      </div>
-      <span style={{ fontSize: 13, color: passed ? '#374151' : '#9ca3af' }}>{label}</span>
-    </div>
-  )
-}
 
 function LoadingStep({ label, delay }: { label: string; delay: number }) {
   return (

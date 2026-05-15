@@ -90,12 +90,17 @@ async def verify_identity(
                 rejection_reason="face_not_found", processing_time_ms=elapsed
             )
 
-        # 4. PROCESS GESTURES & MATCHING
-        # We find the BEST match among all provided frames (Straight, Left, Right)
+        # 4. FACE MATCHING (Process a subset of frames to optimize speed)
+        # We sample every 3rd frame to provide good coverage while keeping processing time low
+        sampled_indices = range(0, len(selfie_arrays), 3)
+        logger.info(f"[{platform_user_id}] Sampling {len(list(sampled_indices))} frames for biometric matching")
+        
         best_match_score = 0
         any_face_found = False
         
-        for i, selfie_arr in enumerate(selfie_arrays):
+        for i in sampled_indices:
+            selfie_arr = selfie_arrays[i]
+            # Extract face from selfie frame
             selfie_face, face_found, _ = extract_face_from_image(selfie_arr)
             if face_found:
                 any_face_found = True
@@ -118,8 +123,8 @@ async def verify_identity(
         liveness_passed = liveness_result.get("liveness_passed", False)
 
         # 6. DETERMINE FINAL STATUS
-        # Threshold: 85% for high confidence matching
-        match_threshold = 85
+        # Threshold: 90% for strict production security (as requested)
+        match_threshold = 90
         verified = best_match_score >= match_threshold and liveness_passed
         
         rejection_reason = None
@@ -130,6 +135,8 @@ async def verify_identity(
                 rejection_reason = "liveness_failed"
         
         elapsed = (time.time() - start_time) * 1000
+        logger.info(f"[{platform_user_id}] Verification complete: verified={verified}, match_score={best_match_score}, liveness={liveness_passed}, doc_type={document_type}, time={elapsed:.2f}ms")
+        
         return IdentityVerifyResponse(
             verified=verified,
             match_score=best_match_score,
