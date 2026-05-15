@@ -68,9 +68,19 @@ async def verify_identity(
                 rejection_reason="face_not_found", processing_time_ms=elapsed
             )
 
-        # 3. DETECT DOCUMENT TYPE
+        # 3. DETECT DOCUMENT TYPE & EXTRACT FIELDS (Using Reducto)
         document_type = detect_document_type(document_array)
-        doc_face, doc_face_found, _ = extract_face_from_image(document_array)
+        doc_fields = extract_document_fields(document_array, document_type)
+        
+        # Prefer Reducto's extracted face region if available
+        doc_face = doc_fields.get("face_region")
+        doc_face_found = doc_face is not None
+        
+        if not doc_face_found:
+            logger.info(f"[{platform_user_id}] Reducto face extraction skipped/failed, falling back to CV2")
+            doc_face, doc_face_found, _ = extract_face_from_image(document_array)
+        else:
+            logger.info(f"[{platform_user_id}] Using high-fidelity face region extracted by Reducto")
         
         if not doc_face_found:
             elapsed = (time.time() - start_time) * 1000

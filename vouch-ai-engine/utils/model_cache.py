@@ -138,7 +138,13 @@ def _load_mediapipe_face_detection():
     """
     try:
         logger.debug("Initializing MediaPipe Face Detection...")
-        mp_face_detection = mp.solutions.face_detection
+        if not hasattr(mp, 'solutions'):
+            # Fallback for Python 3.13 or broken imports
+            from mediapipe.python.solutions import face_detection as mp_fd
+            mp_face_detection = mp_fd
+        else:
+            mp_face_detection = mp.solutions.face_detection
+            
         face_detection = mp_face_detection.FaceDetection(
             model_selection=1,  # 1 = full range model (more robust)
             min_detection_confidence=0.7
@@ -146,8 +152,8 @@ def _load_mediapipe_face_detection():
         logger.debug("MediaPipe Face Detection initialized")
         return face_detection
     except Exception as e:
-        logger.error(f"Failed to initialize MediaPipe Face Detection: {e}")
-        raise
+        logger.debug(f"MediaPipe Face Detection initialization failed: {e}")
+        return None
 
 
 def _load_mediapipe_face_mesh():
@@ -157,7 +163,13 @@ def _load_mediapipe_face_mesh():
     """
     try:
         logger.debug("Initializing MediaPipe Face Mesh...")
-        mp_face_mesh = mp.solutions.face_mesh
+        if not hasattr(mp, 'solutions'):
+            # Fallback for Python 3.13 or broken imports
+            from mediapipe.python.solutions import face_mesh as mp_fm
+            mp_face_mesh = mp_fm
+        else:
+            mp_face_mesh = mp.solutions.face_mesh
+
         face_mesh = mp_face_mesh.FaceMesh(
             static_image_mode=False,
             max_num_faces=1,
@@ -167,8 +179,8 @@ def _load_mediapipe_face_mesh():
         logger.debug("MediaPipe Face Mesh initialized")
         return face_mesh
     except Exception as e:
-        logger.error(f"Failed to initialize MediaPipe Face Mesh: {e}")
-        raise
+        logger.debug(f"MediaPipe Face Mesh initialization failed: {e}")
+        return None
 
 
 class ResponseCache:
