@@ -1,7 +1,3 @@
-"""
-ML Service Main Entry Point
-TrustLayer SDK - Identity Verification & Fraud Detection
-"""
 
 import logging
 import os
@@ -67,7 +63,7 @@ async def health_check():
 async def startup_event():
     """Initialize services on startup"""
     logger.info("=" * 60)
-    logger.info("🚀 ML Service starting up...")
+    logger.info("ML Service starting up...")
     logger.info("=" * 60)
     
     # Log environment
@@ -75,12 +71,12 @@ async def startup_event():
     logger.info(f"📡 ML Service port: {port}")
     
     # Pre-load ML models for optimal performance
-    logger.info("⏳ Pre-loading ML models...")
+    logger.info("Pre-loading ML models...")
     try:
         ModelCache.initialize_models()
-        logger.info("✅ All ML models pre-loaded successfully")
+        logger.info("All ML models pre-loaded successfully")
     except Exception as e:
-        logger.warning(f"⚠️  Model pre-loading partial: {e}")
+        logger.warning(f"Model pre-loading partial: {e}")
     
     # Log endpoints
     logger.info("✓ FastAPI server initialized")
@@ -96,5 +92,5 @@ async def startup_event():
 async def shutdown_event():
     """Cleanup on shutdown"""
     logger.info("=" * 60)
-    logger.info("🛑 ML Service shutting down...")
+    logger.info("ML Service shutting down...")
     logger.info("=" * 60)

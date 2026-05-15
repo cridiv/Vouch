@@ -1,18 +1,41 @@
 """
-Document OCR & Field Extraction
-Handles document type detection, OCR, and field extraction (expiry date, name)
+Document OCR & Field Extraction using Reducto
+Handles document type detection, OCR, and field extraction with spatial awareness
+Reducto preserves document layout and separates images from surrounding text
 """
 
 import logging
 import re
 import cv2
 import numpy as np
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, List, Any
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Regex patterns for document field extraction
+# Lazy load Reducto
+_reducto_loaded = False
+reducto_processor = None
+
+
+def _load_reducto():
+    """Lazy load Reducto document processor on first use"""
+    global _reducto_loaded, reducto_processor
+    if not _reducto_loaded:
+        try:
+            import reducto
+            reducto_processor = reducto.DocumentProcessor()
+            _reducto_loaded = True
+            logger.info("✓ Reducto document processor loaded successfully")
+        except ImportError:
+            logger.warning("⚠️  Reducto not installed - falling back to pytesseract OCR")
+            _reducto_loaded = True
+        except Exception as e:
+            logger.error(f"Error loading Reducto: {e}")
+            _reducto_loaded = True
+
+
+# Regex patterns for document field extraction (fallback)
 EXPIRY_PATTERNS = [
     r'(?:EXP|EXPIR[ES]*|VALID|UNTIL|EXPIRES?)\s*(?::|/|-|\.|\s)\s*(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})',
     r'(\d{1,2})[/\-\.](\d{1,2})[/\-\.](\d{2,4})',  # Date patterns
@@ -31,10 +54,16 @@ DOCUMENT_TYPE_KEYWORDS = {
     "state_id": ["STATE", "ID", "IDENTIFICATION"],
 }
 
+def extract_face_region_with_spatial_awareness(image: np.ndarray) -> str:
+    face_region = _extract_face_region_with_spatial_awareness(result, image)
+    if face_region is not None:
+        fields["face_region_detected"] = True
+        fields["face_region"] = face_region
 
 def detect_document_type(image: np.ndarray) -> str:
     """
-    Detect document type from image using visual analysis and text extraction
+    Detect document type using Reducto's layout analysis
+    Falls back to visual analysis if Reducto unavailable
     
     Args:
         image: CV2 image array
@@ -43,12 +72,31 @@ def detect_document_type(image: np.ndarray) -> str:
         Document type: drivers_license, passport, national_id, state_id, or unknown
     """
     try:
-        # Pre-processing: enhance contrast for OCR
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        _load_reducto()
         
-        # Extract text via OCR-like approach (using shape detection first)
-        # Look for document layout patterns
-        height, width = gray.shape
+        # Try Reducto first (if available)
+        if reducto_processor is not None:
+            try:
+                result = reducto_processor.process_document(
+                    image,
+                    model_name="layout",
+                    structured_output=True
+                )
+                
+                # Extract text from Reducto result
+                text = _extract_text_from_reducto(result)
+                text_upper = text.upper()
+                
+                # Check text keywords for document type confirmation
+                for doc_class, keywords in DOCUMENT_TYPE_KEYWORDS.items():
+                    if any(keyword in text_upper for keyword in keywords):
+                        logger.info(f"Document detected as {doc_class} via Reducto layout analysis")
+                        return doc_class
+            except Exception as e:
+                logger.debug(f"Reducto detection failed: {e}, falling back to visual analysis")
+        
+        # Fallback: visual analysis
+        height, width = image.shape[:2]
         aspect_ratio = width / height
         
         # Passport: usually more square (1:1.3 ratio)
@@ -67,19 +115,6 @@ def detect_document_type(image: np.ndarray) -> str:
             doc_type = "unknown"
             logger.warning(f"Document type unclear (aspect ratio: {aspect_ratio:.2f})")
         
-        # Try to extract text for confirmation
-        try:
-            import pytesseract
-            text = pytesseract.image_to_string(gray).upper()
-            
-            # Check text keywords for document type confirmation
-            for doc_class, keywords in DOCUMENT_TYPE_KEYWORDS.items():
-                if any(keyword in text for keyword in keywords):
-                    logger.info(f"Document confirmed as {doc_class} via text analysis")
-                    return doc_class
-        except Exception as e:
-            logger.debug(f"OCR text extraction skipped: {e}")
-        
         return doc_type
         
     except Exception as e:
@@ -87,9 +122,41 @@ def detect_document_type(image: np.ndarray) -> str:
         return "unknown"
 
 
+def _extract_text_from_reducto(result: Dict[str, Any]) -> str:
+    """
+    Extract text from Reducto result, respecting spatial layout
+    
+    Args:
+        result: Reducto processor result dict
+        
+    Returns:
+        Combined text from all text elements
+    """
+    try:
+        text_parts = []
+        
+        # Reducto returns structured elements with spatial information
+        if isinstance(result, dict):
+            # Extract from text blocks (preserving layout order)
+            if "text" in result:
+                text_parts.append(result["text"])
+            
+            # Extract from structured elements
+            if "elements" in result and isinstance(result["elements"], list):
+                for element in result["elements"]:
+                    if element.get("type") == "text" and "text" in element:
+                        text_parts.append(element["text"])
+        
+        return "\n".join(text_parts)
+    except Exception as e:
+        logger.debug(f"Error extracting text from Reducto result: {e}")
+        return ""
+
+
 def extract_document_fields(image: np.ndarray, doc_type: str) -> Dict[str, Optional[str]]:
     """
-    Extract document fields (name, expiry_date) from document image
+    Extract document fields using Reducto with spatial awareness
+    Reducto preserves layout and separates images from text
     
     Args:
         image: CV2 image array
@@ -99,39 +166,164 @@ def extract_document_fields(image: np.ndarray, doc_type: str) -> Dict[str, Optio
         Dict with fields: name, expiry_date, issue_date, document_number
     """
     fields = {
+    "name": None,
+    "expiry_date": None,
+    "issue_date": None,
+    "document_number": None,
+    "face_region_detected": False,
+    "face_region": None,
+    }
+    
+    try:
+        _load_reducto()
+        
+        # Try Reducto first (if available)
+        if reducto_processor is not None:
+            try:
+                result = reducto_processor.process_document(
+                    image,
+                    model_name="layout",
+                    structured_output=True
+                )
+                
+                # Extract fields using Reducto's structured output
+                fields = _extract_fields_from_reducto(result, doc_type)
+                
+                # Detect face region using spatial information from Reducto
+                face_region = _extract_face_region_with_spatial_awareness(result, image)
+                if face_region is not None:
+                    fields["face_region_detected"] = True
+                
+                logger.info(f"Extracted fields via Reducto: {fields}")
+                return fields
+                
+            except Exception as e:
+                logger.warning(f"Reducto extraction failed: {e}, falling back to pytesseract")
+        
+        # Fallback: use pytesseract
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        try:
+            import pytesseract
+            
+            # Pre-process: increase contrast for better OCR
+            clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+            enhanced = clahe.apply(gray)
+            
+            # Extract text
+            extracted_text = pytesseract.image_to_string(enhanced)
+            logger.info(f"Extracted text ({doc_type}) via pytesseract: {extracted_text[:200]}...")
+            
+            # Extract fields
+            fields["name"] = _extract_name(extracted_text)
+            fields["expiry_date"] = _extract_expiry_date(extracted_text)
+            fields["issue_date"] = _extract_issue_date(extracted_text)
+            fields["document_number"] = _extract_document_number(extracted_text, doc_type)
+            
+        except Exception as e:
+            logger.warning(f"pytesseract error: {e}, using fallback pattern matching")
+            fields.update(_extract_fields_fallback(image))
+        
+        return fields
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in extract_document_fields: {e}")
+        return fields
+
+
+def _extract_fields_from_reducto(result: Dict[str, Any], doc_type: str) -> Dict[str, Optional[str]]:
+    """
+    Extract structured fields from Reducto result
+    Reducto provides spatial coordinates and element types
+    
+    Args:
+        result: Reducto processor result with spatial information
+        doc_type: Document type for field extraction strategy
+        
+    Returns:
+        Dict with extracted fields
+    """
+    fields = {
         "name": None,
         "expiry_date": None,
         "issue_date": None,
         "document_number": None,
+        "face_region_detected": False,
     }
     
     try:
-        import pytesseract
+        # Combine all text from Reducto result
+        full_text = _extract_text_from_reducto(result)
         
-        # Convert to grayscale
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # Use regex patterns for field extraction
+        fields["name"] = _extract_name(full_text)
+        fields["expiry_date"] = _extract_expiry_date(full_text)
+        fields["issue_date"] = _extract_issue_date(full_text)
+        fields["document_number"] = _extract_document_number(full_text, doc_type)
         
-        # Pre-process: increase contrast for better OCR
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-        enhanced = clahe.apply(gray)
+        # Check for image elements (face photo, usually at top or side)
+        if "elements" in result and isinstance(result["elements"], list):
+            for element in result["elements"]:
+                if element.get("type") in ["image", "photo", "picture"]:
+                    fields["face_region_detected"] = True
+                    logger.info(f"Face region detected via Reducto spatial analysis")
+                    break
         
-        # Extract text
-        extracted_text = pytesseract.image_to_string(enhanced)
-        logger.info(f"Extracted text ({doc_type}): {extracted_text[:200]}...")  # Log first 200 chars
-        
-        # Extract fields
-        fields["name"] = _extract_name(extracted_text)
-        fields["expiry_date"] = _extract_expiry_date(extracted_text)
-        fields["issue_date"] = _extract_issue_date(extracted_text)
-        fields["document_number"] = _extract_document_number(extracted_text, doc_type)
-        
-        logger.info(f"Extracted fields: {fields}")
-        
-    except Exception as e:
-        logger.warning(f"pytesseract error or not available ({e}), using fallback pattern matching")
-        fields = _extract_fields_fallback(image)
+        return fields
     
-    return fields
+    except Exception as e:
+        logger.debug(f"Error extracting fields from Reducto: {e}")
+        return fields
+
+
+def _extract_face_region_with_spatial_awareness(result: Dict[str, Any], image: np.ndarray) -> Optional[np.ndarray]:
+    """
+    Extract face region from document using Reducto's spatial information
+    Separates the face image from surrounding text and other elements
+    
+    Args:
+        result: Reducto processor result with bounding boxes and element types
+        image: Original image array
+        
+    Returns:
+        Face region as numpy array or None if not found
+    """
+    try:
+        if "elements" not in result or not isinstance(result["elements"], list):
+            return None
+        
+        height, width = image.shape[:2]
+        
+        # Look for image/photo elements with spatial coordinates
+        for element in result["elements"]:
+            # Reducto marks photos/images separately from text
+            if element.get("type") in ["image", "photo", "picture"]:
+                # Get bounding box if available
+                bbox = element.get("bbox")
+                if bbox and isinstance(bbox, dict):
+                    # bbox format: {"x0": float, "top": float, "x1": float, "bottom": float}
+                    # or {"left": float, "top": float, "right": float, "bottom": float}
+                    x0 = int(bbox.get("x0") or bbox.get("left", 0) * width)
+                    top = int(bbox.get("top", 0) * height)
+                    x1 = int(bbox.get("x1") or bbox.get("right", 1) * width)
+                    bottom = int(bbox.get("bottom", 1) * height)
+                    
+                    # Clamp to image boundaries
+                    x0 = max(0, min(x0, width))
+                    x1 = max(0, min(x1, width))
+                    top = max(0, min(top, height))
+                    bottom = max(0, min(bottom, height))
+                    
+                    if x0 < x1 and top < bottom:
+                        face_region = image[top:bottom, x0:x1]
+                        logger.info(f"Extracted face region using Reducto spatial info: bbox=({x0},{top})-({x1},{bottom})")
+                        return face_region
+        
+        return None
+    
+    except Exception as e:
+        logger.debug(f"Error extracting face region with spatial awareness: {e}")
+        return None
 
 
 def _extract_name(text: str) -> Optional[str]:
@@ -260,28 +452,44 @@ def _extract_document_number(text: str, doc_type: str) -> Optional[str]:
 
 def _extract_fields_fallback(image: np.ndarray) -> Dict[str, Optional[str]]:
     """
-    Fallback field extraction using image region detection
-    when OCR is not available
+    Fallback field extraction using spatial region detection
+    When Reducto and pytesseract are not available
+    
+    Separates image regions (likely face) from text regions using spatial analysis
     """
     fields = {
         "name": None,
         "expiry_date": None,
         "issue_date": None,
         "document_number": None,
+        "face_region_detected": False,
     }
     
     try:
-        # Simple approach: crop regions and look for text patterns
         height, width = image.shape[:2]
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        # Top region likely has name
-        top_region = image[0:int(height*0.3), 0:width]
+        # Detect image/text regions using edge detection
+        edges = cv2.Canny(gray, 50, 150)
         
-        # Bottom region likely has numbers/dates
-        bottom_region = image[int(height*0.7):height, 0:width]
+        # Top region (typically contains photo/face) - usually high edge density
+        top_region_height = int(height * 0.4)
+        top_region = edges[0:top_region_height, :]
+        top_edge_density = np.count_nonzero(top_region) / (top_region_height * width)
         
-        # These would be processed by OCR if available
-        logger.debug("Using fallback field extraction (OCR not available)")
+        # Bottom region (typically contains text/numbers)
+        bottom_region = edges[int(height * 0.6):height, :]
+        bottom_region_height = height - int(height * 0.6)
+        bottom_edge_density = np.count_nonzero(bottom_region) / (bottom_region_height * width)
+        
+        # If top has higher edge density, likely contains face image
+        if top_edge_density > 0.05:
+            fields["face_region_detected"] = True
+            logger.info(f"Face region detected via spatial analysis (edge density: {top_edge_density:.3f})")
+        
+        # Simple text extraction from middle/bottom regions
+        # (Would need actual OCR for production)
+        logger.debug("Using fallback spatial region analysis (OCR not available)")
         
     except Exception as e:
         logger.debug(f"Fallback extraction error: {e}")
