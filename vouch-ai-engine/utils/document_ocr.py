@@ -166,7 +166,6 @@ def extract_document_fields(image: np.ndarray, doc_type: str) -> Dict[str, Optio
     "issue_date": None,
     "document_number": None,
     "face_region_detected": False,
-    "face_region": None,
     }
     
     try:

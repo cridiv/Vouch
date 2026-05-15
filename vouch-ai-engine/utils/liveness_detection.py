@@ -36,8 +36,7 @@ def _load_mediapipe():
             _mediapipe_loaded = True
             logger.info("✓ MediaPipe loaded successfully")
         except Exception as e:
-            # Be less noisy about MediaPipe failures since we have a fallback
-            logger.debug(f"MediaPipe loading failed (likely Python 3.13 incompatibility): {e}")
+            logger.error(f"Failed to load MediaPipe: {e}")
             _mediapipe_loaded = True 
 
 
@@ -261,53 +260,6 @@ def detect_head_turn(frames: List[np.ndarray], rotation_threshold_degrees: float
             "error": str(e)
         }
 
-def _heuristic_liveness_check(frames: List[np.ndarray]) -> dict:
-    """
-    Fallback liveness check using OpenCV face detection and frame delta analysis
-    Used when MediaPipe is unavailable or fails.
-    """
-    try:
-        start_time = time.time()
-        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-        
-        detected_faces = 0
-        centers = []
-        
-        for frame in frames[::2]: # Sample every 2nd frame
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = face_cascade.detectMultiScale(gray, 1.1, 4)
-            if len(faces) > 0:
-                detected_faces += 1
-                (x, y, w, h) = faces[0]
-                centers.append((x + w/2, y + h/2))
-        
-        # Check if face was found in at least 40% of sampled frames
-        face_present = detected_faces >= (len(frames) // 2) * 0.4
-        
-        # Check for motion: calculate variance of face centers
-        motion_detected = False
-        if len(centers) > 2:
-            centers_arr = np.array(centers)
-            std_dev = np.std(centers_arr, axis=0)
-            # If face moves by at least a few pixels, consider it motion
-            motion_detected = np.any(std_dev > 1.5)
-            
-        liveness_passed = face_present and motion_detected
-        confidence = 0.65 if liveness_passed else 0.0
-        
-        logger.info(f"Heuristic liveness fallback: passed={liveness_passed}, face_present={face_present}, motion={motion_detected}")
-        
-        return {
-            "liveness_passed": liveness_passed,
-            "confidence": confidence,
-            "method": "heuristic_fallback",
-            "processing_time_ms": (time.time() - start_time) * 1000
-        }
-    except Exception as e:
-        logger.error(f"Heuristic liveness failed: {e}")
-        return {"liveness_passed": False, "confidence": 0.0, "error": str(e)}
-
-
 def check_liveness(frames: List[np.ndarray]) -> dict:
     """
     Comprehensive liveness check combining blink and head turn
@@ -344,12 +296,6 @@ def check_liveness(frames: List[np.ndarray]) -> dict:
         # (more lenient for MVP, can be tightened later)
         liveness_passed = blink_result.get("blink_detected", False) or head_result.get("head_turn_detected", False)
         
-        # FALLBACK: If MediaPipe failed or didn't detect specific gestures, try heuristic
-        if not liveness_passed:
-            logger.info("MediaPipe liveness checks failed or unavailable. Trying heuristic fallback...")
-            fallback = _heuristic_liveness_check(frames)
-            if fallback.get("liveness_passed"):
-                return fallback
         
         # Confidence is average of both
         blink_conf = blink_result.get("confidence", 0.0)
