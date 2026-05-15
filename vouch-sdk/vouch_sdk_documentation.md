@@ -1,6 +1,6 @@
 # Vouch SDK — Complete Developer Documentation
 
-> **Version:** 1.0.0 · **License:** MIT · **Language:** TypeScript (ESM) · **Runtime:** Browser & Node.js
+> **Version:** 1.1.0 · **License:** MIT · **Language:** TypeScript (ESM) · **Runtime:** Browser & Node.js
 
 ---
 
