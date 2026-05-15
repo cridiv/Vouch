@@ -26,9 +26,9 @@ def _load_reducto():
             import reducto
             reducto_processor = reducto.DocumentProcessor()
             _reducto_loaded = True
-            logger.info("✓ Reducto document processor loaded successfully")
+            logger.info("Reducto document processor loaded successfully")
         except ImportError:
-            logger.warning("⚠️  Reducto not installed - falling back to pytesseract OCR")
+            logger.warning("Reducto not installed - falling back to pytesseract OCR")
             _reducto_loaded = True
         except Exception as e:
             logger.error(f"Error loading Reducto: {e}")
@@ -54,11 +54,6 @@ DOCUMENT_TYPE_KEYWORDS = {
     "state_id": ["STATE", "ID", "IDENTIFICATION"],
 }
 
-def extract_face_region_with_spatial_awareness(image: np.ndarray) -> str:
-    face_region = _extract_face_region_with_spatial_awareness(result, image)
-    if face_region is not None:
-        fields["face_region_detected"] = True
-        fields["face_region"] = face_region
 
 def detect_document_type(image: np.ndarray) -> str:
     """
