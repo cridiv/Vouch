@@ -138,7 +138,7 @@ const vouch = new Vouch('vouch_your_api_key_here');
 | `apiKey` | `string` | ✅ | Your developer API key (begins with `vouch_`). Obtained from the Vouch dashboard or the `/v1/developer/provision` endpoint. |
 
 The constructor creates an internal Axios instance configured with:
-- **Base URL**: Read from `process.env.VOUCH_API_URL`, defaulting to `http://localhost:5000/v1`
+- **Base URL**: Read from `process.env.VOUCH_API_URL`, defaulting to `https://vouch-fmql.onrender.com/v1`
 - **Auth header**: `x-api-key: <your key>` on every request
 
 ---
@@ -666,7 +666,7 @@ try {
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VOUCH_API_URL` | `http://localhost:5000/v1` | Backend API base URL. Set to your production URL in deployment. |
+| `VOUCH_API_URL` | `https://vouch-fmql.onrender.com/v1` | Backend API base URL. Set to your production URL in deployment. |
 | `NEXT_PUBLIC_VOUCH_API_KEY` | — | Your Vouch API key (for Next.js client-side usage) |
 
 ### Production configuration

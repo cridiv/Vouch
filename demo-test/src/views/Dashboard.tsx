@@ -10,7 +10,7 @@ export function Dashboard() {
     buyerId: null as string | null,
     sellerId: null as string | null,
     agreementId: null as string | null,
-    backendUrl: 'http://localhost:5000',
+    backendUrl: 'https://vouch-fmql.onrender.com',
   });
   const [stats, setStats] = useState<DeveloperStats>({
     totalChecksToday: 0,

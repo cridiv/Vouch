@@ -27,7 +27,7 @@ function VerifyContent() {
 
   // Use a dynamic Vouch instance
   const vouch = new Vouch(apiKey || process.env.NEXT_PUBLIC_VOUCH_API_KEY || '', {
-    apiUrl: 'http://localhost:5000/v1'
+    apiUrl: 'https://vouch-fmql.onrender.com/v1'
   })
 
   const handleDocumentComplete = (file: File) => {

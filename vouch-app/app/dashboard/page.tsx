@@ -41,26 +41,23 @@ const DashboardPage = () => {
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    const checkAuthAndProvision = async () => {
-      try {
+    let mounted = true;
+
+    // Use onAuthStateChange to handle the session processing from URL hash
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
+      const user = session?.user;
+
+      if (user) {
+        setUserData(user);
         setIsProvisioning(true);
         setAuthError(null);
 
-        // 1. Check actual production Supabase session
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-
-        const user = session?.user;
-
-        if (user) {
-          setUserData(user);
-
+        try {
           // 2. Provision developer account in Vouch Backend
           const res = await fetch(
-            "http://localhost:5000/v1/developer/provision",
+            "https://vouch-fmql.onrender.com/v1/developer/provision",
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -89,21 +86,28 @@ const DashboardPage = () => {
           setProvisionData(data);
           localStorage.setItem("vouch_api_key", data.apiKey?.rawKey || "");
           localStorage.setItem("vouch_dev_id", data.developerId || "");
-        } else {
+        } catch (err: any) {
+          console.error("Dashboard Auth Error:", err);
+          setAuthError(
+            err.message ||
+              "Authentication verification failed. Please log in again.",
+          );
+        } finally {
+          setIsProvisioning(false);
+        }
+      } else {
+        // Fallback check if we are not in the middle of processing a hash callback
+        const hasHash = typeof window !== 'undefined' && window.location.hash.includes('access_token');
+        if (!hasHash) {
           window.location.href = "/signin";
         }
-      } catch (err: any) {
-        console.error("Dashboard Auth Error:", err);
-        setAuthError(
-          err.message ||
-            "Authentication verification failed. Please log in again.",
-        );
-      } finally {
-        setIsProvisioning(false);
       }
-    };
+    });
 
-    checkAuthAndProvision();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleLogout = async () => {
