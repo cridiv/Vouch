@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { supabase } from "../../lib/supabase";
@@ -29,6 +29,24 @@ const GithubIcon = () => {
 const SignInPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        window.location.href = "/dashboard";
+      }
+    };
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        window.location.href = "/dashboard";
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleGithubLogin = async () => {
     try {
