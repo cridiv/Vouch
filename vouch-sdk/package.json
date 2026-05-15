@@ -1,6 +1,6 @@
 {
   "name": "vouch-sdk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "TypeScript SDK client library for the Vouch (TrustLayer) platform",
   "keywords": [
     "vouch",
