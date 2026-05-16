@@ -43,12 +43,19 @@ const DashboardPage = () => {
   useEffect(() => {
     const init = async () => {
       // Step 1: Check if there is a hash with access_token in the URL
-      const hash = typeof window !== 'undefined' ? window.location.hash : '';
+      const hash = window.location.hash;
+      console.log('Hash present:', !!hash);
+      console.log('Hash contains token:', hash.includes('access_token'));
+
       if (hash && hash.includes('access_token')) {
         // Parse tokens directly from hash
         const params = new URLSearchParams(hash.substring(1));
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
+
+        console.log('Access token length:', accessToken?.length);
+        console.log('Refresh token:', refreshToken);
+        console.log('Supabase URL being used:', process.env.NEXT_PUBLIC_SUPABASE_URL);
 
         if (accessToken && refreshToken) {
           // Clear hash immediately before async work
@@ -59,6 +66,9 @@ const DashboardPage = () => {
             access_token: accessToken,
             refresh_token: refreshToken,
           });
+
+          console.log('setSession error:', error);
+          console.log('setSession data:', data?.session?.user?.email);
 
           if (error || !data.session) {
             setAuthError('Failed to establish session. Please sign in again.');
