@@ -32,35 +32,40 @@ const SignInPage = () => {
 
   useEffect(() => {
     // Clear any stale local state on signin page
-    localStorage.removeItem('vouch_api_key');
-    localStorage.removeItem('vouch_dev_id');
+    localStorage.removeItem("vouch_api_key");
+    localStorage.removeItem("vouch_dev_id");
 
     const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (session) {
         // Verify the session is actually valid before redirecting
-        const { data: { user }, error } = await supabase.auth.getUser();
-        
+        const {
+          data: { user },
+          error,
+        } = await supabase.auth.getUser();
+
         if (user && !error) {
           // Session is genuinely valid
-          window.location.href = '/dashboard';
+          window.location.href = "/dashboard";
         } else {
           // Session exists but is expired — clear it
           await supabase.auth.signOut();
         }
       }
     };
-    
+
     checkAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session) {
-          window.location.href = '/dashboard';
-        }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        window.location.href = "/dashboard";
       }
-    );
+    });
 
     return () => subscription.unsubscribe();
   }, []);
@@ -74,11 +79,11 @@ const SignInPage = () => {
       await supabase.auth.signOut();
 
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'github',
+        provider: "github",
         options: {
           redirectTo: `${window.location.origin}/dashboard`,
           queryParams: {
-            prompt: 'consent',  // forces GitHub to show auth screen every time
+            prompt: "consent", // forces GitHub to show auth screen every time
           },
           skipBrowserRedirect: false,
         },
@@ -135,7 +140,7 @@ const SignInPage = () => {
             </div>
           )}
 
-          {/* OAuth Buttons */}
+          {/* OAuth Button */}
           <div className="flex w-full flex-col gap-4 z-10">
             <Button
               disabled={isLoading}
