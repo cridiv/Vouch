@@ -270,7 +270,7 @@ await vouch.escrow.confirm('agreement_uuid', 'milestone_uuid', 'seller_456');
 ### Base URL
 
 **Sandbox:** `http://localhost:3000`  
-**Production:** `https://vouch.xyz`
+**Production:** `https://vouchsdk.xyz`
 
 ### Authentication
 
@@ -760,7 +760,7 @@ MIT License — see [LICENSE](LICENSE) for details.
 
 ## Support
 
-- **Documentation:** [docs.vouch.ai](https://vouch.xyz/docs)
+- **Documentation:** [docs.vouch.ai](https://vouchsdk.xyz/docs)
 - **Squad Hackathon:** Team Rave
 
 ---
