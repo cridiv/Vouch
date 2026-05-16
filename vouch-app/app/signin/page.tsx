@@ -145,7 +145,7 @@ const SignInPage = () => {
               {isLoading ? (
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                  <span>Connecting to GitHub....</span>
+                  <span>Connecting to GitHub...</span>
                 </div>
               ) : (
                 <>
@@ -157,7 +157,7 @@ const SignInPage = () => {
           </div>
         </div>
 
-        {/* Global Footer Link */}
+        {/* Global Footer Links */}
         <div className="mt-8 flex gap-6 text-xs text-gray-600 font-dm-sans">
           <Link href="#" className="hover:text-gray-400 transition-colors">
             Privacy Policy
