@@ -113,7 +113,7 @@ scenario_d = {
 }
 
 
-def test_fraud_endpoint(base_url="http://localhost:8080"):
+def test_fraud_endpoint(base_url="https://vouch-2uoc.onrender.com"):
     """Test fraud assessment endpoint with all scenarios"""
     
     print("="*70)
@@ -184,7 +184,7 @@ if __name__ == "__main__":
     import sys
     
     # Optional: allow custom URL
-    url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8080"
+    url = sys.argv[1] if len(sys.argv) > 1 else "https://vouch-2uoc.onrender.com"
     
     success = test_fraud_endpoint(url)
     sys.exit(0 if success else 1)

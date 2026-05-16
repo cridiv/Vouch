@@ -39,7 +39,7 @@ export class FraudService {
     // 2. Call ML Endpoint
     let result: FraudResultDto;
     try {
-      const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:8080';
+      const mlUrl = process.env.ML_SERVICE_URL || 'https://vouch-2uoc.onrender.com';
       const response = await lastValueFrom(
         this.httpService.post(`${mlUrl}/fraud/assess`, context, { timeout: 30000 })
       );

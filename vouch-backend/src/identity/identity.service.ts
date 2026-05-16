@@ -39,7 +39,7 @@ export class IdentityService {
     );
 
     // 2. Call ML Engine
-    const mlUrl = process.env.ML_SERVICE_URL || 'http://localhost:8080';
+    const mlUrl = process.env.ML_SERVICE_URL || 'https://vouch-2uoc.onrender.com';
     const formData = new FormData();
     formData.append('platform_user_id', platformUser.id);
     
