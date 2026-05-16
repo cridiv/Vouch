@@ -42,99 +42,105 @@ const DashboardPage = () => {
 
   useEffect(() => {
     const init = async () => {
-      // Step 1: Check if there is a hash with access_token in the URL
+      // Step 1 — Hash present means fresh OAuth redirect
       const hash = window.location.hash;
-      console.log('Hash present:', !!hash);
-      console.log('Hash contains token:', hash.includes('access_token'));
-
       if (hash && hash.includes('access_token')) {
-        // Parse tokens directly from hash
         const params = new URLSearchParams(hash.substring(1));
         const accessToken = params.get('access_token');
         const refreshToken = params.get('refresh_token');
 
-        console.log('Access token length:', accessToken?.length);
-        console.log('Refresh token:', refreshToken);
-        console.log('Supabase URL being used:', process.env.NEXT_PUBLIC_SUPABASE_URL);
-
         if (accessToken && refreshToken) {
-          // Clear hash immediately before async work
           window.history.replaceState(null, '', window.location.pathname);
 
-          // Explicitly set the session — do not wait for Supabase auto-detection
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
 
-          console.log('setSession error:', error);
-          console.log('setSession data:', data?.session?.user?.email);
-
           if (error || !data.session) {
-            setAuthError('Failed to establish session. Please sign in again.');
+            setAuthError('Session expired. Please sign in again.');
             setIsProvisioning(false);
             return;
           }
 
-          // Proceed to provision
           await provision(data.session.user);
           return;
         }
       }
 
-      // Step 2: No hash — check for existing session normally
-      const { data: { session } } = await supabase.auth.getSession();
+      // Step 2 — No hash — Supabase auto-restores persisted session
+      const { data: { session }, error } = await supabase.auth.getSession();
+
       if (session) {
         await provision(session.user);
         return;
       }
 
-      // Step 3: No session at all — redirect to login
-      window.location.href = "/signin";
+      // Step 3 — No session at all
+      window.location.href = '/signin';
     };
 
     const provision = async (user: any) => {
       setUserData(user);
+
+      // Check if we already have provision data cached
+      const cachedKey = localStorage.getItem('vouch_api_key');
+      const cachedDevId = localStorage.getItem('vouch_dev_id');
+      const cachedEmail = localStorage.getItem('vouch_dev_email');
+
+      if (cachedDevId && cachedEmail === user.email) {
+        // Returning user — use cached data, skip backend call
+        setProvisionData({
+          developerId: cachedDevId,
+          apiKey: { prefix: localStorage.getItem('vouch_key_prefix') || '' },
+        });
+        setIsProvisioning(false);
+        return;
+      }
+
+      // First time or cache miss — hit the backend
       setIsProvisioning(true);
       setAuthError(null);
 
       try {
-        const res = await fetch(
-          "https://vouch-fmql.onrender.com/v1/developer/provision",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              email: user.email || "developer@github.com",
-              supabaseUid: user.id,
-              name:
-                user.user_metadata?.full_name ||
-                user.user_metadata?.name ||
-                user.email?.split("@")[0] ||
-                "GitHub Developer",
-              avatarUrl: user.user_metadata?.avatar_url || "",
-              metadata: user.user_metadata || {},
-            }),
-          },
-        );
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 55000);
+
+        const res = await fetch('https://vouch-fmql.onrender.com/v1/developer/provision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            email: user.email || "developer@github.com",
+            supabaseUid: user.id,
+            name: user.user_metadata?.full_name || user.email?.split('@')[0] || "GitHub Developer",
+            avatarUrl: user.user_metadata?.avatar_url || '',
+            metadata: user.user_metadata || {},
+          }),
+        });
+
+        clearTimeout(timeout);
 
         const data = await res.json();
-        if (!res.ok) {
-          throw new Error(
-            data.message ||
-              "Failed to provision developer account in Vouch backend.",
-          );
+        if (!res.ok) throw new Error(data.message || 'Provision failed');
+
+        // Cache everything for return visits
+        localStorage.setItem('vouch_dev_id', data.developerId || '');
+        localStorage.setItem('vouch_dev_email', user.email);
+        localStorage.setItem('vouch_key_prefix', data.apiKey?.prefix || '');
+
+        // Only store raw key if it is a new key (first time)
+        if (data.apiKey?.rawKey) {
+          localStorage.setItem('vouch_api_key', data.apiKey.rawKey);
         }
 
         setProvisionData(data);
-        localStorage.setItem("vouch_api_key", data.apiKey?.rawKey || "");
-        localStorage.setItem("vouch_dev_id", data.developerId || "");
       } catch (err: any) {
-        console.error("Dashboard Auth Error:", err);
-        setAuthError(
-          err.message ||
-            "Authentication verification failed. Please log in again.",
-        );
+        if (err.name === 'AbortError') {
+          setAuthError('Server is waking up — please wait 30 seconds and refresh.');
+        } else {
+          setAuthError(err.message || 'Authentication failed');
+        }
       } finally {
         setIsProvisioning(false);
       }
@@ -145,9 +151,14 @@ const DashboardPage = () => {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    localStorage.removeItem("vouch_api_key");
-    localStorage.removeItem("vouch_dev_id");
-    window.location.href = "/signin";
+    
+    // Clear all cached provision data
+    localStorage.removeItem('vouch_api_key');
+    localStorage.removeItem('vouch_dev_id');
+    localStorage.removeItem('vouch_dev_email');
+    localStorage.removeItem('vouch_key_prefix');
+    
+    window.location.href = '/signin';
   };
 
   const copyApiKey = () => {
