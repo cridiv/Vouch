@@ -31,23 +31,36 @@ const SignInPage = () => {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    // Clear any stale local state on signin page
+    localStorage.removeItem('vouch_api_key');
+    localStorage.removeItem('vouch_dev_id');
+
     const checkAuth = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      
       if (session) {
-        window.location.href = "/dashboard";
+        // Verify the session is actually valid before redirecting
+        const { data: { user }, error } = await supabase.auth.getUser();
+        
+        if (user && !error) {
+          // Session is genuinely valid
+          window.location.href = '/dashboard';
+        } else {
+          // Session exists but is expired — clear it
+          await supabase.auth.signOut();
+        }
       }
     };
+    
     checkAuth();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        window.location.href = "/dashboard";
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === 'SIGNED_IN' && session) {
+          window.location.href = '/dashboard';
+        }
       }
-    });
+    );
 
     return () => subscription.unsubscribe();
   }, []);
@@ -57,10 +70,17 @@ const SignInPage = () => {
       setIsLoading(true);
       setErrorMsg(null);
 
+      // Force clear any existing session before starting OAuth
+      await supabase.auth.signOut();
+
       const { error } = await supabase.auth.signInWithOAuth({
-        provider: "github",
+        provider: 'github',
         options: {
           redirectTo: `${window.location.origin}/dashboard`,
+          queryParams: {
+            prompt: 'consent',  // forces GitHub to show auth screen every time
+          },
+          skipBrowserRedirect: false,
         },
       });
 
