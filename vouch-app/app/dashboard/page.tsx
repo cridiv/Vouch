@@ -51,6 +51,9 @@ const DashboardPage = () => {
         const refreshToken = params.get('refresh_token');
 
         if (accessToken && refreshToken) {
+          // Clear hash immediately before async work
+          window.history.replaceState(null, '', window.location.pathname);
+
           // Explicitly set the session — do not wait for Supabase auto-detection
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -62,9 +65,6 @@ const DashboardPage = () => {
             setIsProvisioning(false);
             return;
           }
-
-          // Clean the URL — remove the hash so it does not persist on refresh
-          window.history.replaceState(null, '', window.location.pathname);
 
           // Proceed to provision
           await provision(data.session.user);
